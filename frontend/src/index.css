@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "tnum" 0, "cv11" 1;
+  }
+  body {
+    @apply bg-ink-50 font-sans text-ink-900;
+  }
+  :focus-visible {
+    @apply outline-ink-900;
+  }
+}
