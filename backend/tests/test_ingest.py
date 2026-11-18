@@ -248,7 +248,8 @@ def test_database_rejects_spans_without_a_trace_in_the_same_project(client: ApiC
     ("column", "value", "constraint"),
     [("kind", "'bogus'", "ck_spans_kind_valid"), ("status", "'done'", "ck_spans_status_valid"),
      ("prompt_tokens", "-5", "ck_spans_usage_non_negative"),
-     ("ended_at", "now() - interval '1 day'", "ck_spans_ended_after_started")],
+     # Relative to the span's own start: "now() - 1 day" stopped being before the fixed T0 on 2026-10-31.
+     ("ended_at", "started_at - interval '1 second'", "ck_spans_ended_after_started")],
 )
 def test_database_enforces_span_constraints(client: ApiClient, project_key, db: Session, column, value, constraint) -> None:
     project, key = project_key

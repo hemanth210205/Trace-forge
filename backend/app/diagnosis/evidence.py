@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.diagnosis import claims as claims_mod
 from app.diagnosis.schemas import ANSWER_EVALUATORS, FORMAT_EVALUATORS, CaseEvidence, Fact, Signals
 from app.models import DatasetVersionCase, EvaluationResult, EvaluationRun, Span, Trace
 
@@ -56,7 +57,8 @@ def load_failed_results(rs: Session, run_id: uuid.UUID) -> list[dict[str, Any]]:
     return [
         {
             "result_id": str(r.id), "case_key": c.case_key, "input": c.input, "expected_output": c.expected_output,
-            "expected_sources": list(c.expected_sources or []), "output": r.output, "execution_error": r.execution_error,
+            "expected_sources": list(c.expected_sources or []), "metadata": dict(c.metadata_ or {}),
+            "output": r.output, "execution_error": r.execution_error,
             "trace_id": str(r.trace_id) if r.trace_id else None, "evaluations": list(r.evaluations or []),
         }
         for r, c in rows
@@ -109,6 +111,28 @@ def _answer_value(case: dict[str, Any]) -> Any:
     return case["output"]
 
 
+def _answer_field_missing(case: dict[str, Any]) -> bool:
+    """True when an answer evaluator could not read its field: the answer content was never evaluated, so the rest
+    of the output must not be treated as the answer (that turns a format failure into a content hypothesis)."""
+    return any(
+        o.get("type") in ANSWER_EVALUATORS and o.get("applicable") and not o.get("passed")
+        and str(o.get("explanation", "")).startswith("Field '") and "is missing from the output" in str(o.get("explanation", ""))
+        for o in case["evaluations"]
+    )
+
+
+def _answer_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("answer", "output", "text", "response"):
+            if isinstance(value.get(key), str):
+                return value[key]
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
 class _Facts:
     def __init__(self) -> None:
         self.items: list[Fact] = []
@@ -118,6 +142,65 @@ class _Facts:
         if len(self.items) < MAX_FACTS_PER_CASE:
             self.items.append(Fact(id=fact_id, kind=kind, statement=statement, trace_id=trace_id, span_id=span_id))  # type: ignore[arg-type]
         return fact_id
+
+
+def _attribute_claims(answer: Any, with_content: list[tuple[str, dict[str, Any], str]], spans: list[dict[str, Any]],
+                      s: Signals, facts: "_Facts", ref: Any, trace_id: str | None) -> None:
+    text = _answer_text(answer)
+    if not text or not text.strip():
+        return
+    units: list[claims_mod.Unit] = []
+    for src, d, sid in with_content:
+        expected = src in s.expected_sources or d.get("id") in s.expected_sources
+        units += claims_mod.document_units(src, d["content"], sid, expected)
+    for sp in spans:
+        if sp["kind"] != "tool":
+            continue
+        tool = sp["attributes"].get("tool", {}) if isinstance(sp["attributes"], dict) else {}
+        name = tool.get("name") if isinstance(tool, dict) and tool.get("name") else sp["name"]
+        tool_unit_list = claims_mod.tool_units(str(name), sp["output"], sp["error"], sp["id"])
+        s.tool_evidence |= bool(tool_unit_list)
+        units += tool_unit_list
+    if not units:
+        return
+    attributed = claims_mod.attribute(text, units)
+    for c in attributed:
+        quoted = _preview(c.text, 120)
+        if c.status in ("supported", "contradicted"):
+            where = f"{'tool' if c.evidence_kind != 'document' else 'document'} {c.source}"
+            verb = "is supported by" if c.status == "supported" else "is contradicted by"
+            statement = f"Claim {c.index} {quoted} {verb} {where} ({c.reason}; evidence {_preview(c.evidence_text, 140)})."
+            fid = facts.add("comparison", statement, trace_id, c.span_id)
+            if c.status == "supported":
+                s.claims_supported += 1
+                s.supporting_sources = list(dict.fromkeys([*s.supporting_sources, str(c.source)]))
+                ref("claim_supported", fid)
+                if c.evidence_kind == "document":
+                    ref("claim_supported_expected" if c.expected_source else "claim_supported_other", fid)
+                    s.claims_supported_by_expected += int(c.expected_source)
+                    s.claims_supported_by_other_document += int(not c.expected_source)
+                else:
+                    s.claims_supported_by_tool += 1
+            else:
+                s.claims_contradicted += 1
+                s.contradicting_sources = list(dict.fromkeys([*s.contradicting_sources, str(c.source)]))
+                ref("claim_contradicted", fid)
+        elif c.status == "unsupported":
+            detail = []
+            if c.novel_numbers:
+                detail.append("value(s) " + ", ".join(c.novel_numbers[:5]))
+            if c.novel_terms:
+                detail.append("term(s) " + ", ".join(json.dumps(t) for t in c.novel_terms[:6]))
+            statement = f"Claim {c.index} {quoted} is not supported by any retrieved document or tool result: " + " and ".join(detail) + " occur in no evidence."
+            s.claims_unsupported += 1
+            ref("claim_unsupported", facts.add("comparison", statement, trace_id))
+        elif c.status == "abstention":
+            s.claims_abstention += 1
+            ref("claim_abstention", facts.add("comparison", f"Claim {c.index} {quoted} reports missing information or an error rather than asserting a fact.", trace_id))
+        else:
+            s.claims_undetermined += 1
+            ref("claim_undetermined", facts.add("comparison", f"Claim {c.index} {quoted} could not be attributed to or refuted by the evidence ({c.reason}).", trace_id))
+    s.claim_count = len(attributed)
 
 
 def build_case_evidence(case: dict[str, Any], trace_found: bool, spans: list[dict[str, Any]], truncated: bool) -> CaseEvidence:
@@ -177,8 +260,11 @@ def build_case_evidence(case: dict[str, Any], trace_found: bool, spans: list[dic
         if truncated:
             missing.append(f"Only the first {MAX_SPANS_PER_TRACE} spans of the trace were analyzed.")
 
-    answer = _answer_value(case)
+    s.answer_available = not _answer_field_missing(case) and not case["execution_error"]
+    answer = _answer_value(case) if s.answer_available else None
     answer_words = content_words(answer) if answer is not None else set()
+    if not s.answer_available and not case["execution_error"]:
+        missing.append("The answer field was missing from the output, so the answer's content could not be checked against evidence.")
 
     # 3. Retrieval spans, documents, and expected sources.
     retrieved: list[tuple[str, dict[str, Any], str]] = []  # (source, document, span id)
@@ -227,10 +313,14 @@ def build_case_evidence(case: dict[str, Any], trace_found: bool, spans: list[dic
                 ref("expected_document", fid)
 
     # 5. Tools and model calls.
+    tool_names_called = []
     for sp in spans:
         if sp["kind"] == "tool":
             s.tool_span_count += 1
             tool = sp["attributes"].get("tool", {}) if isinstance(sp["attributes"], dict) else {}
+            tool_name = tool.get("name") if isinstance(tool, dict) and tool.get("name") else sp.get("name")
+            if tool_name:
+                tool_names_called.append(tool_name)
             label = f"Tool span {_preview(sp['name'], 60)}"
             if isinstance(tool, dict) and tool.get("name"):
                 label += f" (tool {_preview(tool['name'], 60)}, arguments {_preview(tool.get('arguments'), 80)})"
@@ -252,6 +342,43 @@ def build_case_evidence(case: dict[str, Any], trace_found: bool, spans: list[dic
             ref("llm", fid)
             if sp["input"] is None:
                 missing.append(f"The input (prompt) of LLM span {sp['name']!r} was not captured.")
+
+    s.actual_tools = tool_names_called
+    meta = case.get("metadata", {}) or {}
+    expected_tool = meta.get("expected_tool")
+    if expected_tool:
+        s.expected_tool = expected_tool
+        has_expected = expected_tool in tool_names_called
+        unexpected_tools = [t for t in tool_names_called if t != expected_tool]
+        if not has_expected:
+            s.tool_selection_mismatch = True
+            fid = facts.add(
+                "tool",
+                f"Expected tool '{expected_tool}' was not called. Actual tool(s) called: {tool_names_called or ['none']}.",
+                trace_id,
+            )
+            ref("tool_selection_mismatch", fid)
+        elif unexpected_tools:
+            # Both expected and unexpected tools were called
+            s.tool_selection_ambiguous = True
+            fid = facts.add(
+                "tool",
+                f"Expected tool '{expected_tool}' was called, but unexpected tool(s) were also invoked: {unexpected_tools}.",
+                trace_id,
+            )
+            ref("tool_selection_ambiguous", fid)
+        else:
+            # Expected tool called and no unexpected tools
+            s.tool_selection_matched = True
+            fid = facts.add(
+                "tool",
+                f"Expected tool '{expected_tool}' was called without unexpected tools.",
+                trace_id,
+            )
+            ref("tool_selection_matched", fid)
+
+    # 6. Claim-level attribution of the answer to documents and tool results (see app.diagnosis.claims).
+    _attribute_claims(answer, with_content, spans, s, facts, ref, trace_id)
 
     s.fact_refs = refs
     return CaseEvidence(result_id=case["result_id"], case_key=case["case_key"], trace_id=trace_id,

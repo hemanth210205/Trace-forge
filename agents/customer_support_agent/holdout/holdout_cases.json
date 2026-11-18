@@ -1,0 +1,218 @@
+[
+  {
+    "key": "holdout-01-multi-returns-warranty",
+    "input": {"question": "My laptop's charging port stopped working five weeks after it was delivered. Can I still send it back, or is it covered?", "override_mode": "normal"},
+    "expected_output": ["30 days", "manufacturing defects"],
+    "expected_sources": ["kb/returns.md", "kb/warranty.md"],
+    "metadata": {"split": "holdout", "category": "multi_intent", "expected_failure": null, "intents": ["returns_policy", "warranty_policy"],
+                 "reference_answer": "The 30-day return window has passed, but the 1-year limited warranty covers manufacturing defects such as defective charging ports."}
+  },
+  {
+    "key": "holdout-02-multi-shipping-returns",
+    "input": {"question": "How long does express delivery take, and what is the window for sending an item back?", "override_mode": "normal"},
+    "expected_output": ["1 to 2 business days", "30 days"],
+    "expected_sources": ["kb/shipping.md", "kb/returns.md"],
+    "metadata": {"split": "holdout", "category": "multi_intent", "expected_failure": null, "intents": ["shipping_policy", "returns_policy"],
+                 "reference_answer": "Express shipping takes 1 to 2 business days; items may be returned within 30 days of delivery."}
+  },
+  {
+    "key": "holdout-03-multi-warranty-shipping",
+    "input": {"question": "What kind of faults does the hardware warranty handle, and how much is express shipping?", "override_mode": "normal"},
+    "expected_output": ["manufacturing defects", "$14.99"],
+    "expected_sources": ["kb/warranty.md", "kb/shipping.md"],
+    "metadata": {"split": "holdout", "category": "multi_intent", "expected_failure": null, "intents": ["warranty_policy", "shipping_policy"],
+                 "reference_answer": "The warranty covers manufacturing defects; express shipping is a flat $14.99."}
+  },
+  {
+    "key": "holdout-04-multi-all-three",
+    "input": {"question": "I need three things: the return window, the standard shipping time, and what the warranty covers.", "override_mode": "normal"},
+    "expected_output": ["30 days", "3 to 5 business days", "manufacturing defects"],
+    "expected_sources": ["kb/returns.md", "kb/shipping.md", "kb/warranty.md"],
+    "metadata": {"split": "holdout", "category": "multi_intent", "expected_failure": null, "intents": ["returns_policy", "shipping_policy", "warranty_policy"],
+                 "reference_answer": "Returns within 30 days; standard shipping 3 to 5 business days; warranty covers manufacturing defects for 1 year."}
+  },
+  {
+    "key": "holdout-05-multi-partially-unanswerable",
+    "input": {"question": "Do you price match competitors, and how long does standard shipping take?", "override_mode": "normal"},
+    "expected_output": ["3 to 5 business days", "price match"],
+    "expected_sources": ["kb/shipping.md"],
+    "metadata": {"split": "holdout", "category": "multi_intent_partial", "expected_failure": null, "intents": ["shipping_policy", "unsupported_topic"],
+                 "reference_answer": "Standard shipping takes 3 to 5 business days. The policy documents contain no information about price matching."}
+  },
+  {
+    "key": "holdout-06-paraphrase-cracked-screen",
+    "input": {"question": "Is a cracked screen from dropping my phone something the warranty will fix?", "override_mode": "normal"},
+    "expected_output": ["accidental damage"],
+    "expected_sources": ["kb/warranty.md"],
+    "metadata": {"split": "holdout", "category": "paraphrase", "expected_failure": null,
+                 "reference_answer": "No. The warranty does not cover accidental damage such as drops and cracked screens."}
+  },
+  {
+    "key": "holdout-07-paraphrase-express-cost",
+    "input": {"question": "What does it cost to have my parcel arrive in a day or two?", "override_mode": "normal"},
+    "expected_output": ["$14.99"],
+    "expected_sources": ["kb/shipping.md"],
+    "metadata": {"split": "holdout", "category": "paraphrase", "expected_failure": null,
+                 "reference_answer": "Express delivery arrives in 1 to 2 business days for a flat $14.99."}
+  },
+  {
+    "key": "holdout-08-paraphrase-return-three-weeks",
+    "input": {"question": "I bought something three weeks ago and never opened it. Am I still allowed to send it back for my money?", "override_mode": "normal"},
+    "expected_output": ["30 days"],
+    "expected_sources": ["kb/returns.md"],
+    "metadata": {"split": "holdout", "category": "paraphrase", "expected_failure": null,
+                 "reference_answer": "Yes. Unused items may be returned within 30 days of delivery for a refund."}
+  },
+  {
+    "key": "holdout-09-paraphrase-guarantee-defects",
+    "input": {"question": "Which problems does the product guarantee protect me against?", "override_mode": "normal"},
+    "expected_output": ["manufacturing defects"],
+    "expected_sources": ["kb/warranty.md"],
+    "metadata": {"split": "holdout", "category": "paraphrase", "expected_failure": null,
+                 "reference_answer": "The limited hardware warranty protects against manufacturing defects for 1 year."}
+  },
+  {
+    "key": "holdout-10-different-wording-ground-delivery",
+    "input": {"question": "How many business days does regular delivery need to reach me?", "override_mode": "normal"},
+    "expected_output": ["3 to 5 business days"],
+    "expected_sources": ["kb/shipping.md"],
+    "metadata": {"split": "holdout", "category": "different_wording", "expected_failure": null,
+                 "reference_answer": "Standard delivery takes 3 to 5 business days from dispatch."}
+  },
+  {
+    "key": "holdout-11-boundary-refund-full-deduction",
+    "input": {"question": "Please calculate my refund after the deduction fee.", "order_amount": 19.99, "return_eligibility": true, "deductions": 19.99, "override_mode": "normal"},
+    "expected_output": ["$0.00", "eligible"],
+    "expected_sources": [],
+    "metadata": {"split": "holdout", "category": "boundary", "expected_failure": null, "expected_tool": "refund-calculator-tool",
+                 "reference_answer": "Calculated refund amount is $0.00 (eligible)."}
+  },
+  {
+    "key": "holdout-12-boundary-refund-cents",
+    "input": {"question": "Please calculate my refund after the deduction fee.", "order_amount": 59.5, "return_eligibility": true, "deductions": 10.0, "override_mode": "normal"},
+    "expected_output": ["$49.50"],
+    "expected_sources": [],
+    "metadata": {"split": "holdout", "category": "boundary", "expected_failure": null, "expected_tool": "refund-calculator-tool",
+                 "reference_answer": "Calculated refund amount is $49.50 (eligible)."}
+  },
+  {
+    "key": "holdout-13-boundary-lowercase-order-id",
+    "input": {"question": "where is my package ord-202?", "override_mode": "normal"},
+    "expected_output": ["UPS", "Austin, TX"],
+    "expected_sources": [],
+    "metadata": {"split": "holdout", "category": "boundary", "expected_failure": null, "expected_tool": "order-lookup-tool",
+                 "reference_answer": "Your order is in_transit via UPS. Destination: Austin, TX."}
+  },
+  {
+    "key": "holdout-14-boundary-unknown-order",
+    "input": {"question": "Can you look up order ORD-404 for me?", "override_mode": "normal"},
+    "expected_output": ["not found"],
+    "expected_sources": [],
+    "metadata": {"split": "holdout", "category": "boundary", "expected_failure": null, "expected_tool": "order-lookup-tool",
+                 "reference_answer": "Order ORD-404 was not found in customer order records."}
+  },
+  {
+    "key": "holdout-15-boundary-shipping-under-50",
+    "input": {"question": "Is standard shipping free on a $49.99 order?", "override_mode": "normal"},
+    "expected_output": ["$4.99"],
+    "expected_sources": ["kb/shipping.md"],
+    "metadata": {"split": "holdout", "category": "boundary", "expected_failure": null,
+                 "reference_answer": "No. Orders under $50 pay a flat $4.99 standard shipping fee."}
+  },
+  {
+    "key": "holdout-16-tool-execution-order",
+    "input": {"question": "Where is order ORD-202 right now?", "override_mode": "tool_execution_failure"},
+    "expected_output": ["UPS"],
+    "expected_sources": [],
+    "metadata": {"split": "holdout", "category": "tool_execution_failure", "expected_failure": "tool_execution_failure", "expected_tool": "order-lookup-tool",
+                 "reference_answer": "Your order is in_transit via UPS. Destination: Austin, TX."}
+  },
+  {
+    "key": "holdout-17-tool-selection-order",
+    "input": {"question": "What's the delivery status of ORD1002?", "override_mode": "tool_selection_failure"},
+    "expected_output": ["Processing", "2026-11-22"],
+    "expected_sources": [],
+    "metadata": {"split": "holdout", "category": "tool_selection_failure", "expected_failure": "tool_selection_failure", "expected_tool": "order-lookup-tool",
+                 "reference_answer": "Order ORD1002 is currently Processing. Estimated delivery date is 2026-11-22."}
+  },
+  {
+    "key": "holdout-18-tool-execution-refund",
+    "input": {"question": "Calculate the refund fee for my return.", "order_amount": 80.0, "return_eligibility": true, "deductions": 10.0, "override_mode": "tool_execution_failure"},
+    "expected_output": ["$70.00"],
+    "expected_sources": [],
+    "metadata": {"split": "holdout", "category": "tool_execution_failure", "expected_failure": "tool_execution_failure", "expected_tool": "refund-calculator-tool",
+                 "reference_answer": "Calculated refund amount is $70.00 (eligible)."}
+  },
+  {
+    "key": "holdout-19-grounding-fixed-hallucination-shipping",
+    "input": {"question": "How long does standard shipping take?", "override_mode": "grounding_failure"},
+    "expected_output": ["3 to 5 business days"],
+    "expected_sources": ["kb/shipping.md"],
+    "metadata": {"split": "holdout", "category": "grounding_failure", "expected_failure": "grounding_failure",
+                 "reference_answer": "Standard shipping takes 3 to 5 business days."}
+  },
+  {
+    "key": "holdout-20-grounding-contextual-warranty",
+    "input": {"question": "How long is the hardware warranty?", "override_mode": "grounding_failure_contextual"},
+    "expected_output": ["1 year"],
+    "expected_sources": ["kb/warranty.md"],
+    "metadata": {"split": "holdout", "category": "grounding_failure", "expected_failure": "grounding_failure",
+                 "reference_answer": "The limited hardware warranty lasts 1 year from purchase."}
+  },
+  {
+    "key": "holdout-21-grounding-contextual-returns",
+    "input": {"question": "What is the time limit for returning an item?", "override_mode": "grounding_failure_contextual"},
+    "expected_output": ["30 days"],
+    "expected_sources": ["kb/returns.md"],
+    "metadata": {"split": "holdout", "category": "grounding_failure", "expected_failure": "grounding_failure",
+                 "reference_answer": "Items may be returned within 30 days of delivery."}
+  },
+  {
+    "key": "holdout-22-reasoning-contextual-liquid",
+    "input": {"question": "Does the warranty cover liquid spills on my tablet?", "override_mode": "reasoning_failure_contextual"},
+    "expected_output": ["not cover"],
+    "expected_sources": ["kb/warranty.md"],
+    "metadata": {"split": "holdout", "category": "reasoning_failure", "expected_failure": "reasoning_failure",
+                 "reference_answer": "No. The warranty does not cover liquid spills or moisture exposure."}
+  },
+  {
+    "key": "holdout-23-reasoning-contextual-gift-card",
+    "input": {"question": "Can I return a gift card I no longer want?", "override_mode": "reasoning_failure_contextual"},
+    "expected_output": ["non-returnable"],
+    "expected_sources": ["kb/returns.md"],
+    "metadata": {"split": "holdout", "category": "reasoning_failure", "expected_failure": "reasoning_failure",
+                 "reference_answer": "No. Gift cards are non-returnable."}
+  },
+  {
+    "key": "holdout-24-reasoning-contextual-express",
+    "input": {"question": "How many days will express shipping take to reach me?", "override_mode": "reasoning_failure_contextual"},
+    "expected_output": ["1 to 2 business days"],
+    "expected_sources": ["kb/shipping.md"],
+    "metadata": {"split": "holdout", "category": "reasoning_failure", "expected_failure": "reasoning_failure",
+                 "reference_answer": "Express shipping delivers within 1 to 2 business days."}
+  },
+  {
+    "key": "holdout-25-context-selection-motherboard",
+    "input": {"question": "Will you repair a laptop whose motherboard failed on its own under the hardware warranty?", "override_mode": "context_selection_failure"},
+    "expected_output": ["manufacturing defects"],
+    "expected_sources": ["kb/warranty.md"],
+    "metadata": {"split": "holdout", "category": "context_selection_failure", "expected_failure": "context_selection_failure",
+                 "reference_answer": "Yes. Motherboard component failure is a manufacturing defect covered by the 1-year warranty."}
+  },
+  {
+    "key": "holdout-26-ambiguous-policy",
+    "input": {"question": "What's your policy?", "override_mode": "normal"},
+    "expected_output": ["returns", "shipping", "warranty"],
+    "expected_sources": [],
+    "metadata": {"split": "holdout", "category": "ambiguous", "expected_failure": null,
+                 "reference_answer": "Could you clarify whether you are asking about returns, shipping or warranty?"}
+  },
+  {
+    "key": "holdout-27-irrelevant-store-hours",
+    "input": {"question": "What time does your store open on Sundays?", "override_mode": "normal"},
+    "expected_output": ["does not contain"],
+    "expected_sources": [],
+    "metadata": {"split": "holdout", "category": "irrelevant", "expected_failure": null,
+                 "reference_answer": "The policy documentation does not contain information about store opening hours."}
+  }
+]

@@ -1,0 +1,4 @@
+# Dependencies for Customer Support Agent
+python-dotenv>=1.0.0
+pytest>=8.0.0
+# The agent reuses the existing Traceforge SDK in sdk/python

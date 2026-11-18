@@ -29,3 +29,5 @@ test-results/
 .idea/
 Thumbs.db
 .DS_Store
+
+qa/.qa_credentials.json

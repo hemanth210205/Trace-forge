@@ -178,3 +178,54 @@ def test_mock_provider_is_deterministic() -> None:
     spans = [retrieval(["kb/returns.md", "kb/warranty.md"]), llm()]
     outputs = {MockProvider().propose(build_case_evidence(c, True, spans, False)).model_dump_json() for _ in range(5)}
     assert len(outputs) == 1
+
+
+def test_tool_selection_failure_supported_when_metadata_mismatches_trace() -> None:
+    c = case([outcome("normalized_match", False, "order delivered", "wrong answer")])
+    c["metadata"] = {"expected_tool": "order-lookup"}
+    # Trace called fee-calculator instead
+    t_span = tool(ok=True, output={"fee": 0}, span_id="s-tool")
+    t_span["attributes"]["tool"]["name"] = "fee-calculator"
+    evidence, result = diagnose(c, [t_span, llm()])
+    status, sup, contra, _ = evaluate_category("tool_selection_failure", evidence.signals)
+    assert status == "supported"
+    assert "tool_selection_failure" in result
+    h = result["tool_selection_failure"]
+    assert h.evidence_status == "supported"
+    assert h.confidence == 0.80
+    assert any("order-lookup" in f.statement for f in evidence.facts)
+
+
+def test_tool_selection_failure_contradicted_when_expected_tool_called() -> None:
+    c = case([outcome("normalized_match", False, "order delivered", "wrong answer")])
+    c["metadata"] = {"expected_tool": "order-lookup"}
+    # Trace correctly called order-lookup
+    t_span = tool(ok=True, output={"order": "123"}, span_id="s-tool")
+    evidence, result = diagnose(c, [t_span, llm()])
+    status, sup, contra, _ = evaluate_category("tool_selection_failure", evidence.signals)
+    assert status == "contradicted"
+
+
+def test_tool_selection_unsupported_without_expected_tool_metadata() -> None:
+    c = case([outcome("normalized_match", False, "order delivered", "wrong answer")])
+    # No expected_tool in metadata
+    t_span = tool(ok=True, output={"order": "123"}, span_id="s-tool")
+    evidence, result = diagnose(c, [t_span, llm()])
+    status, sup, contra, _ = evaluate_category("tool_selection_failure", evidence.signals)
+    assert status == "unsupported"
+
+
+def test_tool_selection_multiple_tools_expected_and_unexpected_called() -> None:
+    c = case([outcome("normalized_match", False, "order delivered", "wrong answer")])
+    c["metadata"] = {"expected_tool": "order-lookup"}
+    # Multiple tool calls: expected tool AND an unexpected extra tool
+    t1 = tool(ok=True, output={"order": "123"}, span_id="s-tool-1")
+    t2 = tool(ok=True, output={"fee": 10}, span_id="s-tool-2")
+    t2["attributes"]["tool"]["name"] = "fee-calculator"
+    evidence, result = diagnose(c, [t1, t2, llm()])
+    status, sup, contra, note = evaluate_category("tool_selection_failure", evidence.signals)
+    # Ambiguous / extra tools: must NOT be automatically contradicted; classified as inconclusive
+    assert status == "inconclusive"
+    assert "tool_selection_failure" in result
+    h = result["tool_selection_failure"]
+    assert h.confidence is None or h.confidence == 0.40

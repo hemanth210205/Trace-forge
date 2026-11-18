@@ -189,6 +189,7 @@ def arm_case_rows(db: Session, project_id: uuid.UUID, run: EvaluationRun) -> dic
             state = "not_evaluated" if result.passed is None else "passed" if result.passed else "failed"
         out[case.case_key] = {
             "case_id": str(case.id), "position": case.position, "input": case.input, "expected_output": case.expected_output,
+            "metadata": dict(case.metadata_ or {}),  # category / expected_failure, for the reliability report
             "state": state, "score": float(result.score) if result and result.score is not None else None,
             "output": result.output if result else None, "execution_error": result.execution_error if result else None,
             "evaluations": result.evaluations if result else [],
@@ -274,9 +275,14 @@ def compute_comparison(base: dict[str, dict[str, Any]], cand: dict[str, dict[str
     pass_delta = (round(arms["candidate"]["pass_rate"] - arms["baseline"]["pass_rate"], 4)
                   if both_completed and arms["baseline"]["pass_rate"] is not None and arms["candidate"]["pass_rate"] is not None else None)
     measurements = {field: _paired(base, cand, field) for field in ("latency_ms", "tokens", "cost_usd")}
+    reliability = compute_reliability(base, cand, groups, measurements, both_completed, arms)
     fixed, regressed = len(groups["fixed"]), len(groups["regressed"])
+    injected_passed = [f for f in reliability["flags"] if f["code"] == "injected_failure_passed"]
     if not both_completed:
         outcome, reason = "inconclusive", "At least one arm is incomplete, so the arms are not comparable on every case."
+    elif injected_passed and not regressed:
+        outcome, reason = "inconclusive", (f"Known injected failure(s) passed in the candidate arm ({', '.join(injected_passed[0]['cases'][:5])}); "
+                                           "the arms may not have received identical failure conditions.")
     elif regressed and fixed:
         outcome, reason = "mixed", f"{fixed} case(s) fixed and {regressed} regressed."
     elif regressed:
@@ -291,9 +297,125 @@ def compute_comparison(base: dict[str, dict[str, Any]], cand: dict[str, dict[str
         "cases": groups,
         "evaluator_changes": ev_changes,
         "measurements": measurements,
+        "reliability": reliability,
         "suggested_outcome": outcome,
-        "suggested_outcome_reason": reason + " This is a computed suggestion; promotion requires a human decision.",
+        "suggested_outcome_reason": reason + _flag_note(reliability) + " This is a computed suggestion; promotion requires a human decision.",
     }
+
+
+# --- reliability (M10) -----------------------------------------------------------------------------------------------
+#
+# Aggregate pass rate alone is not a promotion signal. Cases can declare ``metadata.expected_failure``: ``null`` marks a
+# positive control (must keep passing), a category name marks a known injected failure (must keep failing: if it
+# passes, the arm did not run under the injected condition). Cases without that key are ordinary cases.
+
+MATERIAL_CATEGORY_DROP = 0.10  # a category losing this much pass rate is "materially damaged"
+BLOCKING_FLAGS = ("positive_control_regression", "injected_failure_passed", "regression_in_previously_passing", "category_tradeoff")
+
+
+def _rate(n: int, d: int) -> float | None:
+    return round(n / d, 4) if d else None
+
+
+def _control(case: dict[str, Any]) -> str | None:
+    meta = case.get("metadata") or {}
+    if "expected_failure" not in meta:
+        return None
+    return "negative" if meta["expected_failure"] else "positive"
+
+
+def compute_reliability(base: dict[str, dict[str, Any]], cand: dict[str, dict[str, Any]], groups: dict[str, list[str]],
+                        measurements: dict[str, Any], both_completed: bool, arms: dict[str, Any]) -> dict[str, Any]:
+    state = {key: (b["state"], cand.get(key, {}).get("state", "missing")) for key, b in base.items()}
+    scored = [k for k, (b, c) in state.items() if b in ("passed", "failed") and c in ("passed", "failed")]
+
+    categories: dict[str, dict[str, Any]] = {}
+    for key in scored:
+        cat = str((base[key].get("metadata") or {}).get("category") or "uncategorized")
+        bucket = categories.setdefault(cat, {"cases": 0, "baseline_passed": 0, "candidate_passed": 0, "fixed": [], "regressed": []})
+        bucket["cases"] += 1
+        bucket["baseline_passed"] += state[key][0] == "passed"
+        bucket["candidate_passed"] += state[key][1] == "passed"
+        change = case_change(*state[key])
+        if change in ("fixed", "regressed"):
+            bucket[change].append(key)
+    for bucket in categories.values():
+        b, c = _rate(bucket["baseline_passed"], bucket["cases"]), _rate(bucket["candidate_passed"], bucket["cases"])
+        bucket.update(baseline_pass_rate=b, candidate_pass_rate=c, delta=None if b is None or c is None else round(c - b, 4))
+
+    positives = [k for k in scored if _control(base[k]) == "positive"]
+    negatives = [k for k in scored if _control(base[k]) == "negative"]
+    pos_regressed = [k for k in positives if state[k] == ("passed", "failed")]
+    neg_newly_passing = [k for k in negatives if state[k] == ("failed", "passed")]
+    neg_not_reproduced = [k for k in negatives if state[k][0] == "passed"]
+    genuine_fixed = [k for k in groups["fixed"] if _control(base[k]) != "negative"]
+    previously_passing_regressed = list(groups["regressed"])
+
+    flags: list[dict[str, Any]] = []
+
+    def flag(code: str, message: str, cases: list[str], blocking: bool = True) -> None:
+        flags.append({"code": code, "blocking": blocking, "message": message, "cases": cases})
+
+    if pos_regressed:
+        flag("positive_control_regression", f"{len(pos_regressed)} positive control(s) passed in the baseline and fail in the candidate.", pos_regressed)
+    if neg_newly_passing:
+        flag("injected_failure_passed", "Known injected failure(s) pass in the candidate arm; either the injected condition was not applied "
+             "identically to both arms or the evaluation cannot detect the failure.", neg_newly_passing)
+    if neg_not_reproduced:
+        flag("injected_failure_not_reproduced", "Known injected failure(s) already pass in the baseline arm, so they cannot test the candidate.",
+             neg_not_reproduced, blocking=False)
+    if previously_passing_regressed:
+        flag("regression_in_previously_passing", f"{len(previously_passing_regressed)} case(s) that passed in the baseline fail in the candidate.",
+             previously_passing_regressed)
+    improved = {c: v for c, v in categories.items() if (v["delta"] or 0) > 0}
+    damaged = {c: v for c, v in categories.items() if v["delta"] is not None and v["delta"] <= -MATERIAL_CATEGORY_DROP}
+    if improved and damaged:
+        flag("category_tradeoff", "The candidate improves " + ", ".join(sorted(improved)) + " while materially damaging "
+             + ", ".join(f"{c} ({v['delta']:+.0%})" for c, v in sorted(damaged.items())) + ".",
+             sorted({k for v in damaged.values() for k in v["regressed"]}))
+    if not positives and not negatives:
+        flag("controls_unavailable", "No case declares metadata.expected_failure, so positive and negative controls cannot be checked.", [], blocking=False)
+    if not both_completed:
+        flag("incomplete_arms", "At least one arm did not complete; the comparison covers only cases scored in both arms.", [], blocking=False)
+
+    blocking = [f["code"] for f in flags if f["blocking"]]
+    if not both_completed:
+        recommendation = "inconclusive"
+    elif blocking:
+        recommendation = "not_recommended"
+    elif not genuine_fixed:
+        recommendation = "no_improvement"
+    else:
+        recommendation = "eligible_for_human_review"
+
+    def delta(field: str) -> dict[str, Any]:
+        m = measurements[field]
+        return {"available": m["available"], "paired_cases": m["paired_cases"], "baseline_mean": m["baseline_mean"],
+                "candidate_mean": m["candidate_mean"], "delta": m["delta"]}
+
+    return {
+        "pass_rates": {"baseline": arms["baseline"]["pass_rate"], "candidate": arms["candidate"]["pass_rate"]},
+        "per_category": dict(sorted(categories.items())),
+        "positive_controls": {"cases": len(positives), "baseline_pass_rate": _rate(sum(state[k][0] == "passed" for k in positives), len(positives)),
+                              "candidate_pass_rate": _rate(sum(state[k][1] == "passed" for k in positives), len(positives)),
+                              "regressed": pos_regressed},
+        "negative_controls": {"cases": len(negatives),
+                              "baseline_detection_rate": _rate(sum(state[k][0] == "failed" for k in negatives), len(negatives)),
+                              "candidate_detection_rate": _rate(sum(state[k][1] == "failed" for k in negatives), len(negatives)),
+                              "now_passing": neg_newly_passing, "not_reproduced_in_baseline": neg_not_reproduced},
+        "cases": {"fixed": groups["fixed"], "genuinely_fixed": genuine_fixed, "regressed": groups["regressed"],
+                  "unchanged_pass": groups["unchanged_pass"], "unchanged_fail": groups["unchanged_fail"], "incomplete": groups["incomplete"]},
+        "latency_ms": delta("latency_ms"), "tokens": delta("tokens"), "cost_usd": delta("cost_usd"),
+        "flags": flags,
+        "recommendation": recommendation,
+        "requires_human_approval": True,
+        "note": "A computed assessment, never an automatic promotion. Aggregate pass rate alone is not a promotion signal.",
+    }
+
+
+def _flag_note(reliability: dict[str, Any]) -> str:
+    blocking = [f["code"] for f in reliability["flags"] if f["blocking"]]
+    return f" Reliability flags: {', '.join(blocking)}." if blocking else ""
 
 
 # --- decisions and hypothesis validation --------------------------------------------------------------------------
@@ -324,6 +446,10 @@ def validation_eligibility(experiment: Experiment, case_key: str) -> tuple[bool,
     if experiment.status != "completed":
         return False, "The experiment has not completed."
     cases = experiment.comparison.get("cases", {})
+    negatives = (experiment.comparison.get("reliability") or {}).get("negative_controls") or {}
+    if case_key in negatives.get("now_passing", []):
+        return False, (f"{case_key} is a known injected failure that passed only in the candidate arm; the arms may not have "
+                       "received identical failure conditions, so this is not evidence of a fix.")
     if case_key in cases.get("fixed", []):
         return True, f"Baseline reproduced the failure of {case_key} and the candidate fixed it."
     if case_key in cases.get("unchanged_fail", []):

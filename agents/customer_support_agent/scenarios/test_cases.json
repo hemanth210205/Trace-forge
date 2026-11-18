@@ -1,0 +1,802 @@
+[
+  {
+    "key": "case-01-correct-flow",
+    "input": {
+      "question": "What does the standard hardware warranty cover?",
+      "override_mode": "normal"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Correct retrieval and correct answer"
+    }
+  },
+  {
+    "key": "case-02-retrieval-failure",
+    "input": {
+      "question": "What is the policy for express shipping delivery fees?",
+      "override_mode": "retrieval_failure_empty"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "retrieval_failure",
+      "expected_failure": "retrieval_failure",
+      "description": "Incorrect retrieval (retriever returned empty list)"
+    }
+  },
+  {
+    "key": "case-03-missing-doc",
+    "input": {
+      "question": "What is the return shipping fee and refund timeline?",
+      "override_mode": "retrieval_failure_irrelevant"
+    },
+    "expected_output": "Items may be returned within 30 days of delivery for a full refund back to the original payment method.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "retrieval_failure",
+      "expected_failure": "retrieval_failure",
+      "description": "Missing relevant document (only irrelevant documents retrieved)"
+    }
+  },
+  {
+    "key": "case-04-context-selection-failure",
+    "input": {
+      "question": "What items are covered under the standard warranty terms?",
+      "override_mode": "context_selection_failure"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "context_selection_failure",
+      "expected_failure": "context_selection_failure",
+      "description": "Correct document retrieved but wrong context selected for answer generation"
+    }
+  },
+  {
+    "key": "case-05-reasoning-failure",
+    "input": {
+      "question": "Does the warranty cover accidental drops and liquid spills?",
+      "override_mode": "reasoning_failure"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "reasoning_failure",
+      "expected_failure": "reasoning_failure",
+      "description": "Correct context selected but synthesis/reasoning reached the opposite conclusion"
+    }
+  },
+  {
+    "key": "case-06-tool-selection-failure",
+    "input": {
+      "question": "What is the current shipping status of my package ORD-202?",
+      "override_mode": "tool_selection_failure"
+    },
+    "expected_output": "Your order is in_transit via UPS. Destination: Austin, TX.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "tool_selection_failure",
+      "expected_failure": "tool_selection_failure",
+      "description": "Incorrect tool selection (invoked refund calculator instead of order lookup)",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-07-tool-execution-failure",
+    "input": {
+      "question": "Can you check the delivery tracking for order ORD-101?",
+      "override_mode": "tool_execution_failure"
+    },
+    "expected_output": "Your order is delivered via FedEx. Destination: New York, NY.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "tool_execution_failure",
+      "expected_failure": "tool_execution_failure",
+      "description": "Tool execution exception (database timeout during tool run)",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-08-missing-info",
+    "input": {
+      "question": "What is the policy regarding international customs duties?",
+      "override_mode": "retrieval_failure_empty"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "missing_information",
+      "expected_failure": "retrieval_failure",
+      "description": "Missing information / unindexed policy inquiry"
+    }
+  },
+  {
+    "key": "case-09-grounding-failure",
+    "input": {
+      "question": "Where is your secret physical return warehouse located?",
+      "override_mode": "grounding_failure"
+    },
+    "expected_output": "Items may be returned within 30 days of delivery for a full refund back to the original payment method.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "grounding_failure",
+      "expected_failure": "grounding_failure",
+      "description": "Unsupported answer / hallucination not grounded in retrieved documents"
+    }
+  },
+  {
+    "key": "case-10-format-failure",
+    "input": {
+      "question": "What is the refund eligibility window for returned items?",
+      "override_mode": "output_format_failure"
+    },
+    "expected_output": "Items may be returned within 30 days of delivery for a full refund back to the original payment method.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "output_format_failure",
+      "expected_failure": "output_format_failure",
+      "description": "Output-format violation (omitted 'answer' key in return payload)"
+    }
+  },
+  {
+    "key": "case-11-correct-shipping",
+    "input": {
+      "question": "How long does standard shipping take across the country?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Correct answer with multiple retrieved documents in context"
+    }
+  },
+  {
+    "key": "case-12-insufficient-evidence",
+    "input": {
+      "question": "What happens if I try to return something with missing tags?",
+      "override_mode": "insufficient_evidence"
+    },
+    "expected_output": "Items must have original packaging and tags to be returned.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "insufficient_evidence",
+      "expected_failure": "insufficient_evidence",
+      "description": "Documents retrieved without captured content (omitted content in trace)"
+    }
+  },
+  {
+    "key": "case-13-positive-order-lookup",
+    "input": {
+      "question": "Can you check the current delivery status for package ORD-202?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Your order is in_transit via UPS. Destination: Austin, TX.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: successful order lookup tool execution",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-14-positive-return-policy",
+    "input": {
+      "question": "Can I return an item within 30 days of delivery for a refund?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Items may be returned within 30 days of delivery for a full refund back to the original payment method.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: standard return policy retrieval and answer"
+    }
+  },
+  {
+    "key": "case-15-positive-refund-calculator",
+    "input": {
+      "question": "Calculate refund deduction for my order",
+      "order_amount": 100.0,
+      "return_eligibility": true,
+      "deductions": 15.0,
+      "override_mode": "normal"
+    },
+    "expected_output": "Calculated refund amount is $85.00 (eligible).",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: successful refund calculator tool execution",
+      "expected_tool": "refund-calculator-tool"
+    }
+  },
+  {
+    "key": "case-16-positive-express-shipping",
+    "input": {
+      "question": "How much is express shipping and how long does it take to deliver?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Express shipping takes 1 to 2 business days and costs $14.99.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: express shipping tier inquiry"
+    }
+  },
+  {
+    "key": "case-17-paraphrase-warranty",
+    "input": {
+      "question": "What is protected under the one year limited hardware guarantee?",
+      "override_mode": "normal"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Paraphrased query: 1-year hardware guarantee coverage"
+    }
+  },
+  {
+    "key": "case-18-paraphrase-shipping-free",
+    "input": {
+      "question": "Do you offer free delivery for orders above fifty dollars?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Paraphrased query: free delivery threshold above $50"
+    }
+  },
+  {
+    "key": "case-19-paraphrase-returns-window",
+    "input": {
+      "question": "How many days do I have to send back a product for a refund?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Items may be returned within 30 days of delivery for a full refund back to the original payment method.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Paraphrased query: return timeframe in days"
+    }
+  },
+  {
+    "key": "case-20-order-lookup-ORD1001",
+    "input": {
+      "question": "Can you check tracking on order ORD1001?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Order ORD1001 is currently Shipped. Estimated delivery date is 2026-11-20.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Known order ORD1001 lookup",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-21-order-lookup-ORD-303",
+    "input": {
+      "question": "Where is package ORD-303 right now?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Your order is processing via USPS. Destination: Seattle, WA.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Known order ORD-303 lookup",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-22-refund-zero-deduction",
+    "input": {
+      "question": "Calculate refund deduction for my order",
+      "order_amount": 75.0,
+      "return_eligibility": true,
+      "deductions": 0.0,
+      "override_mode": "normal"
+    },
+    "expected_output": "Calculated refund amount is $75.00 (eligible).",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Boundary test: eligible return with zero deductions",
+      "expected_tool": "refund-calculator-tool"
+    }
+  },
+  {
+    "key": "case-23-refund-full-deduction",
+    "input": {
+      "question": "Calculate refund deduction for my order",
+      "order_amount": 50.0,
+      "return_eligibility": true,
+      "deductions": 50.0,
+      "override_mode": "normal"
+    },
+    "expected_output": "Calculated refund amount is $0.00 (eligible).",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Boundary test: 100% deductions resulting in zero refund",
+      "expected_tool": "refund-calculator-tool"
+    }
+  },
+  {
+    "key": "case-24-warranty-claim-process",
+    "input": {
+      "question": "What is the procedure to submit a warranty replacement claim?",
+      "override_mode": "normal"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: warranty claim procedure inquiry"
+    }
+  },
+  {
+    "key": "case-25-shipping-dispatch-cutoff",
+    "input": {
+      "question": "When is the daily cutoff time for same-day shipping dispatch?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: order dispatch cutoff rule"
+    }
+  },
+  {
+    "key": "case-26-shipping-delay-escalation",
+    "input": {
+      "question": "What happens if a package tracking status has no update for 48 hours?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: shipping delay escalation policy"
+    }
+  },
+  {
+    "key": "case-27-positive-packaging-requirement",
+    "input": {
+      "question": "Are original packaging and product tags required for returns?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Items must have original packaging and tags to be returned.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: return packaging condition verification"
+    }
+  },
+  {
+    "key": "case-28-refund-ineligible-policy",
+    "input": {
+      "question": "Calculate refund deduction for my order",
+      "order_amount": 120.0,
+      "return_eligibility": false,
+      "deductions": 0.0,
+      "override_mode": "normal"
+    },
+    "expected_output": "Calculated refund amount is $0.00 (ineligible).",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Negative control: item rejected for return eligibility",
+      "expected_tool": "refund-calculator-tool"
+    }
+  },
+  {
+    "key": "case-29-order-missing-not-found",
+    "input": {
+      "question": "What is the status of package ORD-999?",
+      "override_mode": "normal"
+    },
+    "expected_output": "I encountered an error looking up that information: Order ID 'ORD-999' was not found in customer order records.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Boundary test: non-existent order gracefully handled as lookup error",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-30-shipping-boundary-50",
+    "input": {
+      "question": "Is delivery free on a purchase of exactly 50 dollars?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Boundary test: exact $50 threshold for shipping"
+    }
+  },
+  {
+    "key": "case-31-conflicting-opened-consumables",
+    "input": {
+      "question": "Can I return opened consumable products within the thirty day window?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Items may be returned within 30 days of delivery for a full refund back to the original payment method.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Policy check: non-returnable exception handling"
+    }
+  },
+  {
+    "key": "case-32-cross-policy-warranty-returns",
+    "input": {
+      "question": "Can I return a defective hardware unit after 45 days of delivery?",
+      "override_mode": "normal"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Multi-policy query: past 30-day return window but covered under 1-year warranty"
+    }
+  },
+  {
+    "key": "case-33-positive-hardware-defect",
+    "input": {
+      "question": "Does warranty cover dead hardware components from factory defect?",
+      "override_mode": "normal"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: dead hardware defect claim"
+    }
+  },
+  {
+    "key": "case-34-positive-express-timeline",
+    "input": {
+      "question": "How fast does express courier delivery arrive at my house?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Express shipping takes 1 to 2 business days and costs $14.99.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: express courier duration"
+    }
+  },
+  {
+    "key": "case-35-positive-ord1002-processing",
+    "input": {
+      "question": "What is the delivery estimate for order ORD1002?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Order ORD1002 is currently Processing. Estimated delivery date is 2026-11-22.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: order lookup ORD1002 processing status",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-36-positive-ord1003-delivered",
+    "input": {
+      "question": "Has my package ORD1003 arrived yet?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Order ORD1003 is currently Delivered. Estimated delivery date is 2026-11-15.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: order lookup ORD1003 delivered status",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-37-positive-refund-partial",
+    "input": {
+      "question": "Calculate refund deduction for my order",
+      "order_amount": 250.0,
+      "return_eligibility": true,
+      "deductions": 25.0,
+      "override_mode": "normal"
+    },
+    "expected_output": "Calculated refund amount is $225.00 (eligible).",
+    "expected_sources": [],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: partial refund ledger breakdown",
+      "expected_tool": "refund-calculator-tool"
+    }
+  },
+  {
+    "key": "case-38-retrieval-empty-warranty",
+    "input": {
+      "question": "What is the replacement timeframe under warranty claims?",
+      "override_mode": "retrieval_failure_empty"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "retrieval_failure",
+      "expected_failure": "retrieval_failure",
+      "description": "Negative control: empty retrieval on warranty replacement query"
+    }
+  },
+  {
+    "key": "case-39-retrieval-irrelevant-returns",
+    "input": {
+      "question": "What payment method receives the returned money?",
+      "override_mode": "retrieval_failure_irrelevant"
+    },
+    "expected_output": "Items may be returned within 30 days of delivery for a full refund back to the original payment method.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "retrieval_failure",
+      "expected_failure": "retrieval_failure",
+      "description": "Negative control: irrelevant retrieval on refund payment query"
+    }
+  },
+  {
+    "key": "case-40-context-selection-shipping-as-warranty",
+    "input": {
+      "question": "Are manufacturing defects covered by the hardware guarantee?",
+      "override_mode": "context_selection_failure"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "context_selection_failure",
+      "expected_failure": "context_selection_failure",
+      "description": "Negative control: shipping context selected for warranty inquiry"
+    }
+  },
+  {
+    "key": "case-41-reasoning-shipping-guarantee",
+    "input": {
+      "question": "Does standard shipping guarantee delivery in exactly 1 day?",
+      "override_mode": "reasoning_failure"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "reasoning_failure",
+      "expected_failure": "reasoning_failure",
+      "description": "Negative control: opposite conclusion synthesized for shipping delivery window"
+    }
+  },
+  {
+    "key": "case-42-reasoning-returns-consumables",
+    "input": {
+      "question": "Can I return consumables after breaking their seal?",
+      "override_mode": "reasoning_failure"
+    },
+    "expected_output": "Items may be returned within 30 days of delivery for a full refund back to the original payment method.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "reasoning_failure",
+      "expected_failure": "reasoning_failure",
+      "description": "Negative control: incorrect reasoning on non-returnable consumable item"
+    }
+  },
+  {
+    "key": "case-43-tool-selection-tracking-as-calculator",
+    "input": {
+      "question": "What is the courier destination for ORD-101?",
+      "override_mode": "tool_selection_failure"
+    },
+    "expected_output": "Your order is delivered via FedEx. Destination: New York, NY.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "tool_selection_failure",
+      "expected_failure": "tool_selection_failure",
+      "description": "Negative control: invoked refund tool for order lookup",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-44-tool-execution-timeout-303",
+    "input": {
+      "question": "Look up tracking details for package ORD-303",
+      "override_mode": "tool_execution_failure"
+    },
+    "expected_output": "Your order is processing via USPS. Destination: Seattle, WA.",
+    "expected_sources": [],
+    "metadata": {
+      "category": "tool_execution_failure",
+      "expected_failure": "tool_execution_failure",
+      "description": "Negative control: database connection timeout during ORD-303 lookup",
+      "expected_tool": "order-lookup-tool"
+    }
+  },
+  {
+    "key": "case-45-grounding-free-phone",
+    "input": {
+      "question": "Do I get a brand new free smartphone when returning my order?",
+      "override_mode": "grounding_failure"
+    },
+    "expected_output": "Items may be returned within 30 days of delivery for a full refund back to the original payment method.",
+    "expected_sources": [
+      "kb/returns.md"
+    ],
+    "metadata": {
+      "category": "grounding_failure",
+      "expected_failure": "grounding_failure",
+      "description": "Negative control: hallucinated promotional claim ungrounded in policy"
+    }
+  },
+  {
+    "key": "case-46-grounding-lifetime-warranty",
+    "input": {
+      "question": "Does your hardware warranty last forever for the customer's lifetime?",
+      "override_mode": "grounding_failure"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "grounding_failure",
+      "expected_failure": "grounding_failure",
+      "description": "Negative control: hallucinated lifetime warranty duration"
+    }
+  },
+  {
+    "key": "case-47-format-missing-answer-key",
+    "input": {
+      "question": "How much does express shipping cost?",
+      "override_mode": "output_format_failure"
+    },
+    "expected_output": "Express shipping takes 1 to 2 business days and costs $14.99.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "output_format_failure",
+      "expected_failure": "output_format_failure",
+      "description": "Negative control: missing 'answer' schema key"
+    }
+  },
+  {
+    "key": "case-48-insufficient-evidence-shipping",
+    "input": {
+      "question": "What are the carrier restrictions for shipping lithium ion batteries?",
+      "override_mode": "insufficient_evidence"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "insufficient_evidence",
+      "expected_failure": "insufficient_evidence",
+      "description": "Negative control: omitted passage content on battery shipping restrictions"
+    }
+  },
+  {
+    "key": "case-49-insufficient-evidence-warranty",
+    "input": {
+      "question": "What is the warranty coverage for commercial enterprise resale products?",
+      "override_mode": "insufficient_evidence"
+    },
+    "expected_output": "The warranty covers manufacturing defects for 1 year and strictly does not cover accidental damage.",
+    "expected_sources": [
+      "kb/warranty.md"
+    ],
+    "metadata": {
+      "category": "insufficient_evidence",
+      "expected_failure": "insufficient_evidence",
+      "description": "Negative control: omitted passage content on enterprise resale warranty"
+    }
+  },
+  {
+    "key": "case-50-positive-shipping-tracking-updates",
+    "input": {
+      "question": "When can I expect my shipping tracking number after placing an order?",
+      "override_mode": "normal"
+    },
+    "expected_output": "Standard shipping takes 3 to 5 business days and is free for orders over $50.",
+    "expected_sources": [
+      "kb/shipping.md"
+    ],
+    "metadata": {
+      "category": "correct",
+      "expected_failure": null,
+      "description": "Positive control: shipping tracking notification timeframe"
+    }
+  }
+]

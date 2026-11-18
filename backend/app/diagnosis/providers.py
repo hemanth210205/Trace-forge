@@ -69,6 +69,21 @@ class MockProvider:
         if s.execution_error:
             add("reasoning_failure", "The task raised an exception before producing an output.", refs.get("execution_error", []), 0.4,
                 "The exception's origin is only visible in the trace's error spans.")
+        if s.has_trace and s.tool_selection_mismatch and s.answer_failed:
+            add(
+                "tool_selection_failure",
+                f"The expected tool '{s.expected_tool}' was not called during execution. Actual tools invoked: {s.actual_tools or ['none']}.",
+                refs.get("tool_selection_mismatch", []) + refs.get("answer_failed", []),
+                0.80,
+            )
+        elif s.has_trace and s.tool_selection_ambiguous and s.answer_failed:
+            add(
+                "tool_selection_failure",
+                f"The expected tool '{s.expected_tool}' was called, but unexpected additional tools were also invoked: {[t for t in s.actual_tools if t != s.expected_tool]}.",
+                refs.get("tool_selection_ambiguous", []),
+                0.40,
+                "Extra tool calls may indicate confusion in tool selection; evaluate whether extraneous tools impacted the result.",
+            )
         if s.has_trace and s.tool_error_span_ids:
             add("tool_execution_failure",
                 f"{len(s.tool_error_span_ids)} tool call(s) failed in this execution" + ("" if s.answer_failed else ", although the answer evaluators passed") + ".",
@@ -81,21 +96,29 @@ class MockProvider:
             elif s.answer_passed_any:
                 detail += " The answer evaluators passed, so the missing retrieval accounts for the source check failure, not for an incorrect answer."
             add("retrieval_failure", detail, refs.get("expected_missing", []) + refs.get("retrieval_empty", []), 0.85)
-        if s.has_trace and s.answer_failed and s.documents_have_content and s.best_document_overlap is not None:
-            best, expected_hit = s.best_document, (s.best_document in s.expected_sources or s.best_document in s.retrieved_expected)
-            if s.retrieved_expected and not expected_hit and s.best_document_overlap >= 0.5:
+        if s.has_trace and s.answer_failed and s.answer_available and s.claim_count:
+            # Claim-level attribution (see app.diagnosis.claims); whole-answer overlap is only reported as context.
+            others = [src for src in s.supporting_sources if src not in s.expected_sources and src not in s.retrieved_expected]
+            if s.claims_contradicted:
+                add("reasoning_failure",
+                    f"{s.claims_contradicted} claim(s) in the answer are contradicted by evidence the agent retrieved "
+                    f"({', '.join(s.contradicting_sources)}): the information was available but the conclusion disagrees with it.",
+                    refs.get("claim_contradicted", []) + refs.get("answer_failed", []), 0.75)
+            if s.claims_unsupported:
+                add("grounding_failure",
+                    f"{s.claims_unsupported} claim(s) in the answer assert values or terms that occur in no retrieved document or tool result; "
+                    "the answer is not supported by the evidence.", refs.get("claim_unsupported", []), 0.7)
+            if s.retrieved_expected and s.claims_supported_by_other_document and not s.claims_supported_by_expected:
                 ranks = ", ".join(f"{src} at rank {r}" for src, r in s.retrieved_expected.items())
                 add("context_selection_failure",
-                    f"The expected source was retrieved ({ranks}), but {s.best_document_overlap:.0%} of the answer's content words come from "
-                    f"{best}; the answer was built from the wrong retrieved document.",
-                    refs.get("expected_retrieved", []) + refs.get("best_document", []), 0.85)
-                add("grounding_failure", "The answer may not be supported by the expected evidence.", refs.get("best_document", []), 0.3)
-            elif s.best_document_overlap < 0.3:
-                add("grounding_failure", f"At most {s.best_document_overlap:.0%} of the answer's content words appear in any retrieved document; "
-                    "the answer is not supported by the retrieved evidence.", refs.get("best_document", []) + refs.get("other_document", []), 0.7)
-            elif expected_hit and s.best_document_overlap >= 0.5:
-                add("reasoning_failure", f"The answer draws on the expected source {best} yet fails the answer evaluators; "
-                    "the synthesis of the answer is the likely problem.", refs.get("best_document", []), 0.6)
+                    f"The expected source was retrieved ({ranks}), but the answer's claims are attributed to {', '.join(others) or 'another document'}; "
+                    "the answer was built from the wrong retrieved document.",
+                    refs.get("expected_retrieved", []) + refs.get("claim_supported_other", []), 0.85)
+                add("grounding_failure", "The answer may not be supported by the expected evidence.", refs.get("claim_supported_other", []), 0.3)
+            elif (s.claims_supported_by_expected and not s.claims_supported_by_other_document and not s.claims_contradicted
+                  and not s.claims_unsupported and not s.tool_error_span_ids and not s.missing_sources):
+                add("reasoning_failure", f"The answer is built from the expected source ({', '.join(s.supporting_sources)}) yet fails the "
+                    "answer evaluators; the synthesis of the answer is the likely problem.", refs.get("claim_supported_expected", []), 0.6)
         if s.has_trace and s.answer_failed and not out:
             add("reasoning_failure", "The answer is wrong and no retrieval, tool or format problem was found in the trace.",
                 refs.get("answer_failed", []), 0.35, "Without document content or tool evidence the cause cannot be narrowed further.")

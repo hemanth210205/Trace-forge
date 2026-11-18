@@ -54,6 +54,25 @@ class Signals(BaseModel):
     tool_span_count: int = 0
     tool_error_span_ids: list[str] = Field(default_factory=list)
     execution_error: bool = False
+    expected_tool: str | None = None
+    actual_tools: list[str] = Field(default_factory=list)
+    tool_selection_mismatch: bool = False
+    tool_selection_matched: bool = False
+    tool_selection_ambiguous: bool = False
+    # Claim-level attribution (app.diagnosis.claims). In-memory only: Signals are never persisted.
+    answer_available: bool = True
+    tool_evidence: bool = False
+    claim_count: int = 0
+    claims_supported: int = 0
+    claims_supported_by_expected: int = 0
+    claims_supported_by_other_document: int = 0
+    claims_supported_by_tool: int = 0
+    claims_contradicted: int = 0
+    claims_unsupported: int = 0
+    claims_abstention: int = 0
+    claims_undetermined: int = 0
+    supporting_sources: list[str] = Field(default_factory=list)
+    contradicting_sources: list[str] = Field(default_factory=list)
     # Which fact ids back each signal, so assessment can cite them.
     fact_refs: dict[str, list[str]] = Field(default_factory=dict)
 
