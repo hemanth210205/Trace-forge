@@ -187,8 +187,8 @@ The commands below are for **Windows PowerShell**.
 ### 1. Clone the repository
 
 ```powershell
-git clone https://github.com/<your-username>/traceforge.git
-cd traceforge
+git clone https://github.com/hemanth210205/Trace-forge.git
+cd Trace-forge
 ```
 
 ### 2. Create your environment file

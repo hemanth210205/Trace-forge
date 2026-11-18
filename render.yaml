@@ -31,8 +31,10 @@ services:
         value: "true"
       - key: TRACEFORGE_COOKIE_SECURE
         value: "true"
-      # Render's proxy reaches the service from private addresses; visitors have public ones. Forwarded headers are
-      # believed only from these ranges, and a visitor's address is the first public one from the right.
+      # Render's internal hop reaches the service from a private address. Forwarded headers are believed only from
+      # these ranges, so a client cannot spoof its address. Cloudflare's ranges are deliberately not trusted (Workers
+      # run on them). Which address the rate limiter counts on Render must be checked live: DEPLOY.md, "Client
+      # addresses on Render".
       - key: TRACEFORGE_TRUSTED_PROXIES
         value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,127.0.0.1,::1,fc00::/7"
       # No pre-deploy step on the free plan: upgrade the database at start. The value must be the database name.

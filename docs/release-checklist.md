@@ -54,7 +54,7 @@ Prerequisites: Docker Desktop, Python 3.11 (backend; the SDK supports 3.10+), No
 npm, Microsoft Edge (only for the end-to-end tests).
 
 ```powershell
-git clone <repository> Traceforge; cd Traceforge
+git clone https://github.com/hemanth210205/Trace-forge.git; cd Trace-forge
 Copy-Item .env.example .env
 # Edit .env: set POSTGRES_PASSWORD (and the same password in the three *_DATABASE_URL lines),
 # TRACEFORGE_SECRET_KEY and TRACEFORGE_API_KEY_PEPPER. Generate each secret with:
