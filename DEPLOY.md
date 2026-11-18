@@ -36,9 +36,16 @@ Singapore region), a [`Dockerfile`](Dockerfile) that builds the console and the 
    repository **hemanth210205/Trace-forge**.
 2. **New → Blueprint**, pick the repository and branch `main`. Render reads `render.yaml` and shows a web service
    `traceforge` and a database `traceforge-db`.
-3. **Apply**. (Google/GitHub sign-in is added later, in R4, because the OAuth apps need the live address.)
+3. Render asks for a value for `TRACEFORGE_MIGRATE_MAIN_ON_START`: enter `traceforge`. Then **Apply**.
+   (Google/GitHub sign-in is added later, in R4, because the OAuth apps need the live address.)
 4. Wait for the deploy. The first build takes a few minutes. When the log shows
-   `Traceforge on database 'traceforge' at revision 0007`, the database was created and migrated.
+   `Traceforge on database '<name>' at revision 0007`, the database was created and migrated.
+
+   Render may give the database a suffix (for example `traceforge_lx31`). Then the first start stops instead, and
+   nothing is written to the database:
+   `Refusing to start: TRACEFORGE_MIGRATE_MAIN_ON_START must be the main database's exact name ('traceforge_lx31')`.
+   Check the name under **traceforge-db → Info → Database**, set `TRACEFORGE_MIGRATE_MAIN_ON_START` to exactly that
+   name in **traceforge → Environment**, and **Save changes**. The redeploy migrates the database.
 5. Your address is shown at the top of the service page, e.g. `https://traceforge.onrender.com` (Render adds a suffix
    if the name is taken). Open `https://<your-address>/api/v1/health`: `{"status":"ok","database":"ok",...}`.
 
@@ -51,7 +58,7 @@ What `render.yaml` sets, and why:
 | `TRACEFORGE_PUBLIC_BIND` | `true` | Lets the server listen on `0.0.0.0` behind Render's proxy. Refused unless the next two are set |
 | `TRACEFORGE_COOKIE_SECURE` | `true` | Sessions only over HTTPS |
 | `TRACEFORGE_TRUSTED_PROXIES` | private address ranges | Render's internal hop reaches the service from a private address. Forwarded headers are believed only from those ranges, so a client cannot spoof its address. Which address the rate limiter then sees on Render must be checked live: see [Client addresses on Render](#client-addresses-on-render-check-after-deploying) |
-| `TRACEFORGE_MIGRATE_MAIN_ON_START` | `traceforge` | Upgrades the database at start. Must equal the database name; anything else stops the server |
+| `TRACEFORGE_MIGRATE_MAIN_ON_START` | entered by you: the database's exact name | Upgrades the database at start. Must equal the database name (which may have a suffix, see step 4); anything else stops the server. Kept in the dashboard (`sync: false`), so a Blueprint sync never resets it |
 | `TRACEFORGE_REGISTRATION` | `invite` | Nobody can sign up without an invitation |
 | Public URL, allowed host, trusted origin | your `onrender.com` address | Taken from `RENDER_EXTERNAL_URL` / `RENDER_EXTERNAL_HOSTNAME` by `deploy/render-start.sh` |
 

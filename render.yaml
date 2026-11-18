@@ -37,9 +37,11 @@ services:
       # addresses on Render".
       - key: TRACEFORGE_TRUSTED_PROXIES
         value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,127.0.0.1,::1,fc00::/7"
-      # No pre-deploy step on the free plan: upgrade the database at start. The value must be the database name.
+      # No pre-deploy step on the free plan: upgrade the database at start. The value must be the database's exact
+      # name, which Render may give a suffix (e.g. traceforge_lx31), so it is entered in the dashboard (Render asks for
+      # it when the Blueprint is created) and a Blueprint sync never overwrites it. See DEPLOY.md, R1.
       - key: TRACEFORGE_MIGRATE_MAIN_ON_START
-        value: traceforge
+        sync: false
       # Who may create accounts: create the first one from your computer (DEPLOY.md, "Render").
       - key: TRACEFORGE_REGISTRATION
         value: invite
