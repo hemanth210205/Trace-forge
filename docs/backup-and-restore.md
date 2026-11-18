@@ -49,8 +49,8 @@ docker cp $file traceforge-postgres:/tmp/verify.dump
 docker exec traceforge-postgres pg_restore --list /tmp/verify.dump > "$file.list.txt"
 docker exec traceforge-postgres rm -f /tmp/verify.dump
 Select-String -Path "$file.list.txt" -Pattern "dbname:|Dumped from"
-(Select-String -Path "$file.list.txt" -Pattern " TABLE public ").Count        # 19 at schema revision 0005
-(Select-String -Path "$file.list.txt" -Pattern " TRIGGER public ").Count      # 10 at schema revision 0005
+(Select-String -Path "$file.list.txt" -Pattern " TABLE public ").Count        # 20 at schema revision 0006 (19 at 0005)
+(Select-String -Path "$file.list.txt" -Pattern " TRIGGER public ").Count      # 10 at schema revisions 0005 and 0006
 Select-String -Path "$file.list.txt" -Pattern "TABLE DATA public alembic_version"
 ```
 

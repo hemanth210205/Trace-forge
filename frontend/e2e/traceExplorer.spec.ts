@@ -78,14 +78,14 @@ test("SDK traces from the sample agent are visible and inspectable in the Trace 
   await page.screenshot({ path: `${SHOTS}/05-trace-detail-llm.png`, fullPage: true });
 
   // Back to the (still filtered) list, clear filters, and open the refund question's trace.
-  await page.getByRole("link", { name: "← Traces" }).click();
+  await page.getByRole("link", { name: "Back to Traces" }).click();
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(rows).toHaveCount(3);
   for (let i = 0; i < 3; i++) {
     await rows.nth(i).getByRole("link").click();
     await expect(page.getByLabel("Trace details")).toContainText("question");
     if (await page.getByLabel("Trace details").getByText("refunds").count()) break;
-    await page.getByRole("link", { name: "← Traces" }).click();
+    await page.getByRole("link", { name: "Back to Traces" }).click();
   }
   await tree.getByText("kb-search").click();
   const kbPanel = page.getByLabel("Span kb-search");

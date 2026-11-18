@@ -68,6 +68,15 @@ class Settings(BaseSettings):
     recovery_interval_seconds: float = Field(default=60.0, ge=0, le=3600, validation_alias="TRACEFORGE_RECOVERY_INTERVAL_SECONDS")
     stale_job_grace_seconds: float = Field(default=120.0, ge=10, le=3600, validation_alias="TRACEFORGE_STALE_JOB_GRACE_SECONDS")
 
+    # Sign in with Google / GitHub (OAuth 2.0). A provider is offered only when both its id and secret are set.
+    # public_url is the origin the browser uses for the console; redirect URIs are <public_url>/api/v1/auth/oauth/
+    # <provider>/callback and must be registered exactly like that with the provider.
+    public_url: str = Field(default="http://127.0.0.1:8000", validation_alias="TRACEFORGE_PUBLIC_URL")
+    google_client_id: str | None = Field(default=None, validation_alias="TRACEFORGE_GOOGLE_CLIENT_ID")
+    google_client_secret: SecretStr | None = Field(default=None, validation_alias="TRACEFORGE_GOOGLE_CLIENT_SECRET")
+    github_client_id: str | None = Field(default=None, validation_alias="TRACEFORGE_GITHUB_CLIENT_ID")
+    github_client_secret: SecretStr | None = Field(default=None, validation_alias="TRACEFORGE_GITHUB_CLIENT_SECRET")
+
     login_limiter_max_keys: int = Field(
         default=10_000, ge=100, le=1_000_000, validation_alias="TRACEFORGE_LOGIN_LIMITER_MAX_KEYS"
     )
@@ -82,6 +91,19 @@ class Settings(BaseSettings):
     @property
     def allowed_host_list(self) -> list[str]:
         return [h.strip().lower() for h in self.allowed_hosts.split(",") if h.strip()]
+
+    @property
+    def public_origin(self) -> str:
+        return self.public_url.strip().rstrip("/")
+
+    @property
+    def oauth_providers(self) -> list[str]:
+        """Providers with both a client id and a secret configured, in display order."""
+        configured = {
+            "google": bool(self.google_client_id and self.google_client_secret and self.google_client_secret.get_secret_value()),
+            "github": bool(self.github_client_id and self.github_client_secret and self.github_client_secret.get_secret_value()),
+        }
+        return [name for name in ("google", "github") if configured[name]]
 
     @property
     def cors_origin_list(self) -> list[str]:

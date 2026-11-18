@@ -317,6 +317,22 @@ not listening.
 | `TRACEFORGE_FRONTEND_DIST` | Folder of the built console. Empty disables serving it. | `frontend/dist` |
 | `TRACEFORGE_LOG_LEVEL` | Log level | `INFO` |
 
+### Google and GitHub sign-in
+
+Optional. A provider's button is enabled only when both its client id and secret are set; otherwise it is shown
+disabled.
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `TRACEFORGE_GITHUB_CLIENT_ID`, `TRACEFORGE_GITHUB_CLIENT_SECRET` | A GitHub OAuth App | *unset* |
+| `TRACEFORGE_GOOGLE_CLIENT_ID`, `TRACEFORGE_GOOGLE_CLIENT_SECRET` | A Google OAuth client (Web application) | *unset* |
+| `TRACEFORGE_PUBLIC_URL` | The origin your browser uses for the console. Use `http://localhost:5173` with `npm run dev`. | `http://127.0.0.1:8000` |
+
+Register `<TRACEFORGE_PUBLIC_URL>/api/v1/auth/oauth/github/callback` (or `.../google/callback`) as the redirect URL
+with the provider. Only provider-verified emails are accepted. A first sign-in creates an account without a password,
+or links the existing account with that email; afterwards the provider account is recognised by its id. The flow uses
+a signed, 10-minute `state` cookie (and PKCE for Google), and returns only to local paths.
+
 ### Login rate limiting
 
 | Variable | Description | Default |
@@ -599,6 +615,7 @@ All endpoints are under `/api/v1`. Interactive docs: `http://127.0.0.1:8000/api/
 | --- | --- | --- |
 | Health | `GET /health` | None |
 | Auth | `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Session |
+| Sign-in providers | `GET /auth/providers`; `GET /auth/oauth/{provider}/start`, `GET /auth/oauth/{provider}/callback` (browser redirects) | None |
 | Projects | `GET`, `POST /projects`; `GET`, `PATCH`, `DELETE /projects/{id}` | Session |
 | API keys | `GET`, `POST /projects/{id}/api-keys`; `DELETE /projects/{id}/api-keys/{key_id}` | Session |
 | Key check | `GET /api-keys/self` | API key |
@@ -782,9 +799,13 @@ More detail: [docs/release-checklist.md](docs/release-checklist.md), [backend/RE
 
 ## Author
 
-**Hemanth**
+**Hemanth Kumar**
 
-Found a bug or have an idea? Open an issue or a pull request.
+- Email: [hk744610@gmail.com](mailto:hk744610@gmail.com)
+- LinkedIn: [linkedin.com/in/hemanth131104](https://www.linkedin.com/in/hemanth131104/)
+- GitHub: [github.com/hemanth210205](https://github.com/hemanth210205)
+
+Found a bug or have an idea? Open an issue or a pull request, or get in touch.
 
 ---
 

@@ -11,6 +11,8 @@ const PYTHON = path.resolve(HERE, "..", ".venv", "Scripts", "python.exe");
 // database) and the Vite dev server. Uses the system Microsoft Edge, so no browser download is needed.
 export default defineConfig({
   testDir: "./e2e",
+  // Needs the seeded QA database and account; run it with playwright.qa.config.ts instead.
+  testIgnore: "qa_walkthrough.spec.ts",
   timeout: 90_000,
   workers: 1,
   reporter: [["list"]],

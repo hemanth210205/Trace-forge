@@ -1,15 +1,21 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Database, Download, Plus, Trash2 } from "lucide-react";
 
 import { api, ApiError } from "../api/client";
 import type { Dataset, DatasetCase, EvaluationRun, VersionDetail, VersionSummary } from "../api/types";
 import { useApi } from "../api/useApi";
 import { RunStatusBadge, percent, preview } from "../components/evaluation";
-import { Button, EmptyState, ErrorState, Field, SelectInput, Spinner, TextInput, cx } from "../components/ui";
+import { Button, Card, EmptyState, ErrorState, Field, SelectInput, Spinner, TextInput, cx } from "../components/ui";
 import { formatRelative, formatTimestamp } from "../lib/format";
 
 type Tab = "cases" | "versions" | "import" | "evaluations";
-const TABS: [Tab, string][] = [["cases", "Draft cases"], ["versions", "Versions"], ["import", "Import / export"], ["evaluations", "Evaluations"]];
+const TABS: [Tab, string][] = [
+  ["cases", "Draft cases"],
+  ["versions", "Versions"],
+  ["import", "Import / export"],
+  ["evaluations", "Evaluations"],
+];
 
 /** Text fields accept JSON; anything that is not valid JSON is kept as a plain string. Empty means "none". */
 export function parseLoose(text: string): unknown {
@@ -21,7 +27,8 @@ export function parseLoose(text: string): unknown {
   }
 }
 
-const toText = (value: unknown) => (value === null || value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value, null, 2));
+const toText = (value: unknown) =>
+  value === null || value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value, null, 2);
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError && err.code === "validation_error" && Array.isArray(err.details)) {
@@ -42,16 +49,34 @@ export function DatasetPage() {
 
   if (dataset.error) {
     return dataset.error instanceof ApiError && dataset.error.status === 404 ? (
-      <EmptyState title="Dataset not found" action={<Link className="text-sm underline" to={`/projects/${projectId}/datasets`}>All datasets</Link>} />
+      <EmptyState
+        title="Dataset not found"
+        action={
+          <Link className="text-sm underline text-accent" to={`/projects/${projectId}/datasets`}>
+            All datasets
+          </Link>
+        }
+      />
     ) : (
       <ErrorState error={dataset.error} onRetry={dataset.reload} />
     );
   }
-  if (!dataset.data) return <Spinner label="Loading dataset" />;
+  if (!dataset.data) {
+    return (
+      <div className="py-12 text-center">
+        <Spinner label="Loading dataset" />
+      </div>
+    );
+  }
   const d = dataset.data;
 
   async function remove() {
-    if (!window.confirm(`Delete "${d.name}" with all its versions, evaluation runs, diagnoses, experiments and promotion decisions? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        `Delete "${d.name}" with all its versions, evaluation runs, diagnoses, experiments and promotion decisions? This cannot be undone.`,
+      )
+    )
+      return;
     setDeleting(true);
     setDeleteError(undefined);
     try {
@@ -64,33 +89,83 @@ export function DatasetPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      <Link to={`/projects/${projectId}/datasets`} className="text-sm text-ink-500 hover:text-ink-900">← Datasets</Link>
-      <header className="flex flex-wrap items-start gap-3 border border-ink-200 bg-white px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold">{d.name}</h1>
-          {d.description && <p className="text-sm text-ink-500">{d.description}</p>}
-          <p className="mt-1 text-xs text-ink-500">
-            {d.draft_case_count} draft case{d.draft_case_count === 1 ? "" : "s"} ·{" "}
-            {d.latest_version ? `latest version v${d.latest_version.version} (${d.latest_version.case_count} cases)` : "no published version"}
-            {d.draft_changed_since_latest && <span className="ml-1 text-amber-700">· draft has unpublished changes</span>}
-          </p>
+    <div className="space-y-4">
+      {/* Back button */}
+      <div>
+        <Link
+          to={`/projects/${projectId}/datasets`}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-100 transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to Datasets
+        </Link>
+      </div>
+
+      {/* Dataset Header Card */}
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Database className="h-5 w-5 text-slate-500" />
+              <h1 className="text-xl font-semibold tracking-tight text-slate-100">{d.name}</h1>
+            </div>
+            {d.description && <p className="mt-1 text-xs text-slate-400">{d.description}</p>}
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-slate-400 font-mono">
+              <span className="text-slate-300">
+                {d.draft_case_count} draft case{d.draft_case_count === 1 ? "" : "s"}
+              </span>
+              <span>·</span>
+              <span>
+                {d.latest_version
+                  ? `latest version v${d.latest_version.version} (${d.latest_version.case_count} cases)`
+                  : "no published version"}
+              </span>
+              {d.draft_changed_since_latest && (
+                <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.2 text-2xs text-amber-300">
+                  draft has unpublished changes
+                </span>
+              )}
+            </div>
+          </div>
+          <div>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={deleting}
+              onClick={() => void remove()}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>{deleting ? "Deleting…" : "Delete dataset"}</span>
+            </Button>
+          </div>
+          {deleteError && (
+            <p role="alert" className="w-full text-xs text-red-400 font-medium">
+              {deleteError}
+            </p>
+          )}
         </div>
-        <Button variant="danger" className="h-7 text-xs" disabled={deleting} onClick={() => void remove()}>{deleting ? "Deleting…" : "Delete dataset"}</Button>
-        {deleteError && <p role="alert" className="w-full text-sm text-red-700">{deleteError}</p>}
-      </header>
-      <nav className="flex gap-4 border-b border-ink-200" aria-label="Dataset">
+      </Card>
+
+      {/* Secondary Tab Navigation */}
+      <nav className="flex gap-2 border-b border-border pb-1" aria-label="Dataset">
         {TABS.map(([key, label]) => (
           <button
             key={key}
             type="button"
             onClick={() => setParams(key === "cases" ? {} : { tab: key }, { replace: true })}
-            className={cx("-mb-px border-b-2 px-1 pb-2 text-sm", tab === key ? "border-ink-900 font-semibold" : "border-transparent text-ink-500 hover:text-ink-900")}
+            className={cx(
+              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              tab === key
+                ? "bg-surface-raised text-accent-400 font-semibold border border-border"
+                : "text-slate-400 hover:bg-surface hover:text-slate-200",
+            )}
           >
             {label}
           </button>
         ))}
       </nav>
+
+      {/* Active Tab View */}
       {tab === "cases" && <CasesTab base={base} onChange={dataset.reload} />}
       {tab === "versions" && <VersionsTab base={base} dataset={d} onChange={dataset.reload} />}
       {tab === "import" && <ImportTab base={base} onChange={dataset.reload} />}
@@ -130,11 +205,18 @@ function CasesTab({ base, onChange }: { base: string; onChange: () => void }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm text-ink-500">The draft is editable. Publishing freezes it as a new immutable version.</p>
-        <Button variant="primary" className="ml-auto" onClick={() => setEditing("new")}>Add case</Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-slate-400">
+          The draft is editable. Publishing freezes it as a new immutable version.
+        </p>
+        <Button variant="primary" size="sm" onClick={() => setEditing("new")}>
+          <Plus className="h-3.5 w-3.5" />
+          <span>Add case</span>
+        </Button>
       </div>
-      {removeError && <p role="alert" className="text-sm text-red-700">{removeError}</p>}
+
+      {removeError && <p role="alert" className="text-xs text-red-400">{removeError}</p>}
+
       {editing && (
         <CaseEditor
           base={base}
@@ -147,33 +229,50 @@ function CasesTab({ base, onChange }: { base: string; onChange: () => void }) {
           onCancel={() => setEditing(null)}
         />
       )}
+
       {cases.error && <ErrorState error={cases.error} onRetry={cases.reload} />}
-      {cases.loading && !cases.data && <Spinner label="Loading cases" />}
+      {cases.loading && !cases.data && (
+        <div className="py-8 text-center">
+          <Spinner label="Loading cases" />
+        </div>
+      )}
+
       {cases.data && cases.data.length === 0 && !editing && (
         <EmptyState title="The draft has no cases">Add cases one by one or import a JSONL file.</EmptyState>
       )}
+
       {cases.data && cases.data.length > 0 && (
-        <div className="overflow-x-auto border border-ink-200 bg-white">
-          <table className="w-full table-fixed text-sm">
-            <thead className="border-b border-ink-200 bg-ink-50 text-left text-2xs uppercase tracking-wider text-ink-500">
+        <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-sm">
+          <table className="w-full table-fixed text-sm border-collapse">
+            <thead className="border-b border-border bg-surface-raised text-left text-xs font-medium text-slate-400">
               <tr>
-                <th className="w-44 px-3 py-2 font-semibold">Key</th>
-                <th className="px-3 py-2 font-semibold">Input</th>
-                <th className="px-3 py-2 font-semibold">Expected output</th>
-                <th className="hidden w-48 px-3 py-2 font-semibold md:table-cell">Expected sources</th>
-                <th className="w-32 px-3 py-2" />
+                <th className="w-44 px-3 py-2.5 font-semibold text-slate-300">Case Key</th>
+                <th className="px-3 py-2.5 font-semibold text-slate-300">Input</th>
+                <th className="px-3 py-2.5 font-semibold text-slate-300">Expected Output</th>
+                <th className="hidden w-48 px-3 py-2.5 font-semibold text-slate-300 md:table-cell">Expected Sources</th>
+                <th className="w-32 px-3 py-2.5 text-right font-semibold text-slate-300">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-ink-100">
+            <tbody className="divide-y divide-border">
               {cases.data.map((c) => (
-                <tr key={c.id} className="align-top">
-                  <td className="truncate px-3 py-2 font-mono text-xs">{c.key}</td>
-                  <td className="truncate px-3 py-2 text-xs" title={toText(c.input)}>{preview(c.input)}</td>
-                  <td className="truncate px-3 py-2 text-xs" title={toText(c.expected_output)}>{preview(c.expected_output)}</td>
-                  <td className="hidden truncate px-3 py-2 font-mono text-2xs md:table-cell">{c.expected_sources.join(", ") || "—"}</td>
-                  <td className="px-3 py-1.5 text-right">
-                    <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditing(c)}>Edit</Button>
-                    <Button variant="ghost" className="h-7 px-2 text-xs text-red-700" onClick={() => void remove(c)}>Remove</Button>
+                <tr key={c.id} className="align-top hover:bg-surface-hover/80 transition-colors">
+                  <td className="truncate px-3 py-2.5 font-mono text-xs text-slate-200 font-medium">{c.key}</td>
+                  <td className="truncate px-3 py-2.5 text-xs text-slate-300 font-mono" title={toText(c.input)}>
+                    {preview(c.input)}
+                  </td>
+                  <td className="truncate px-3 py-2.5 text-xs text-slate-300 font-mono" title={toText(c.expected_output)}>
+                    {preview(c.expected_output)}
+                  </td>
+                  <td className="hidden truncate px-3 py-2.5 font-mono text-2xs text-slate-400 md:table-cell">
+                    {c.expected_sources.join(", ") || "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>
+                      Edit
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => void remove(c)}>
+                      Remove
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -185,11 +284,26 @@ function CasesTab({ base, onChange }: { base: string; onChange: () => void }) {
   );
 }
 
-function CaseEditor({ base, existing, onDone, onCancel }: { base: string; existing: DatasetCase | null; onDone: () => void; onCancel: () => void }) {
+function CaseEditor({
+  base,
+  existing,
+  onDone,
+  onCancel,
+}: {
+  base: string;
+  existing: DatasetCase | null;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
   const [form, setForm] = useState<CaseForm>(
     existing
-      ? { key: existing.key, input: toText(existing.input), expected: toText(existing.expected_output),
-          sources: existing.expected_sources.join("\n"), metadata: Object.keys(existing.metadata).length ? JSON.stringify(existing.metadata, null, 2) : "" }
+      ? {
+          key: existing.key,
+          input: toText(existing.input),
+          expected: toText(existing.expected_output),
+          sources: existing.expected_sources.join("\n"),
+          metadata: Object.keys(existing.metadata).length ? JSON.stringify(existing.metadata, null, 2) : "",
+        }
       : EMPTY_FORM,
   );
   const [error, setError] = useState<string | null>(null);
@@ -219,37 +333,48 @@ function CaseEditor({ base, existing, onDone, onCancel }: { base: string; existi
     }
   }
 
-  const area = "min-h-[5.5rem] w-full rounded border border-ink-200 bg-white p-2 font-mono text-xs focus:border-ink-700 focus:outline-none focus:ring-1 focus:ring-ink-700";
+  const area =
+    "min-h-[5.5rem] w-full rounded border border-border bg-surface p-2.5 font-mono text-xs text-slate-100 placeholder:text-slate-500 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";
   return (
-    <form onSubmit={save} className="grid gap-3 border border-ink-200 bg-white p-4 md:grid-cols-2" aria-label={existing ? `Edit case ${existing.key}` : "New case"}>
-      <Field label="Key" hint="Optional; generated if empty. Letters, digits, . _ : -">
-        <TextInput value={form.key} onChange={set("key")} maxLength={100} />
-      </Field>
-      <Field label="Expected sources" hint="One per line: document source or id the agent should retrieve.">
-        <textarea className={area} value={form.sources} onChange={set("sources")} />
-      </Field>
-      <Field label="Input" hint="JSON, or plain text. Passed to your agent.">
-        <textarea className={area} value={form.input} onChange={set("input")} required />
-      </Field>
-      <Field label="Expected output" hint="JSON, or plain text. Leave empty if only sources/fields are checked.">
-        <textarea className={area} value={form.expected} onChange={set("expected")} />
-      </Field>
-      <Field label="Metadata" hint="Optional JSON object.">
-        <textarea className={area} value={form.metadata} onChange={set("metadata")} />
-      </Field>
-      <div className="flex items-end gap-2">
-        <Button variant="primary" type="submit">{existing ? "Save case" : "Add case"}</Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-      </div>
-      {error && <p role="alert" className="text-sm text-red-700 md:col-span-2">{error}</p>}
-    </form>
+    <Card>
+      <form onSubmit={save} className="grid gap-3 md:grid-cols-2" aria-label={existing ? `Edit case ${existing.key}` : "New case"}>
+        <Field label="Key" hint="Optional; generated if empty. Letters, digits, . _ : -">
+          <TextInput value={form.key} onChange={set("key")} maxLength={100} />
+        </Field>
+        <Field label="Expected sources" hint="One per line: document source or id the agent should retrieve.">
+          <textarea className={area} value={form.sources} onChange={set("sources")} />
+        </Field>
+        <Field label="Input" hint="JSON, or plain text. Passed to your agent.">
+          <textarea className={area} value={form.input} onChange={set("input")} required />
+        </Field>
+        <Field label="Expected output" hint="JSON, or plain text. Leave empty if only sources/fields are checked.">
+          <textarea className={area} value={form.expected} onChange={set("expected")} />
+        </Field>
+        <Field label="Metadata" hint="Optional JSON object.">
+          <textarea className={area} value={form.metadata} onChange={set("metadata")} />
+        </Field>
+        <div className="flex items-end gap-2">
+          <Button variant="primary" type="submit">
+            {existing ? "Save case" : "Add case"}
+          </Button>
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+        {error && <p role="alert" className="text-xs text-red-400 md:col-span-2">{error}</p>}
+      </form>
+    </Card>
   );
 }
 
 // --- versions ---------------------------------------------------------------------------------------------
 
 function VersionsTab({ base, dataset, onChange }: { base: string; dataset: Dataset; onChange: () => void }) {
-  const versions = useApi((signal) => api<VersionSummary[]>(`${base}/versions`, { signal }), [base, dataset.updated_at, dataset.latest_version?.id]);
+  const versions = useApi((signal) => api<VersionSummary[]>(`${base}/versions`, { signal }), [
+    base,
+    dataset.updated_at,
+    dataset.latest_version?.id,
+  ]);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null);
@@ -270,28 +395,61 @@ function VersionsTab({ base, dataset, onChange }: { base: string; dataset: Datas
   }
 
   return (
-    <div className="space-y-3">
-      <form onSubmit={publish} className="flex flex-wrap items-end gap-2 border border-ink-200 bg-white p-3">
-        <Field label={`Publish the draft as v${next}`} hint={canPublish ? "Published versions can never be changed." : dataset.draft_case_count === 0 ? "The draft is empty." : "The draft is identical to the latest version."}>
-          <TextInput value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Release notes (optional)" className="w-80" maxLength={2000} />
-        </Field>
-        <Button variant="primary" type="submit" disabled={!canPublish}>Publish v{next}</Button>
-        {error && <p role="alert" className="w-full text-sm text-red-700">{error}</p>}
-      </form>
+    <div className="space-y-4">
+      <Card>
+        <form onSubmit={publish} className="flex flex-wrap items-end gap-3">
+          <Field
+            label={`Publish the draft as v${next}`}
+            hint={
+              canPublish
+                ? "Published versions can never be changed."
+                : dataset.draft_case_count === 0
+                ? "The draft is empty."
+                : "The draft is identical to the latest version."
+            }
+          >
+            <TextInput
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Release notes (optional)"
+              className="w-80"
+              maxLength={2000}
+            />
+          </Field>
+          <Button variant="primary" type="submit" disabled={!canPublish}>
+            Publish v{next}
+          </Button>
+          {error && <p role="alert" className="w-full text-xs text-red-400">{error}</p>}
+        </form>
+      </Card>
+
       {versions.error && <ErrorState error={versions.error} onRetry={versions.reload} />}
-      {versions.data && versions.data.length === 0 && <EmptyState title="No versions yet">Publish the draft to create version 1.</EmptyState>}
+      {versions.data && versions.data.length === 0 && (
+        <EmptyState title="No versions yet">Publish the draft to create version 1.</EmptyState>
+      )}
+
       {versions.data && versions.data.length > 0 && (
-        <ul className="divide-y divide-ink-100 border border-ink-200 bg-white">
+        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
           {versions.data.map((v) => (
-            <li key={v.id} className="px-3 py-2">
+            <li key={v.id} className="p-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                <span className="font-mono font-semibold">v{v.version}</span>
-                <span className="text-xs text-ink-500">{v.case_count} cases · {formatRelative(v.created_at)}</span>
-                <span className="font-mono text-2xs text-ink-500" title="Content hash">{v.content_hash.slice(0, 12)}</span>
-                {v.notes && <span className="text-xs text-ink-700">{v.notes}</span>}
-                <span className="ml-auto flex gap-1">
-                  <a className="rounded px-2 py-1 text-xs text-ink-700 hover:bg-ink-100" href={`/api/v1${base}/export?version=${v.version}&format=jsonl`}>Export JSONL</a>
-                  <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setOpen(open === v.version ? null : v.version)}>
+                <span className="font-mono font-semibold text-slate-200">v{v.version}</span>
+                <span className="text-xs text-slate-400 font-mono">
+                  {v.case_count} cases · {formatRelative(v.created_at)}
+                </span>
+                <span className="font-mono text-2xs text-slate-500" title="Content hash">
+                  {v.content_hash.slice(0, 12)}
+                </span>
+                {v.notes && <span className="text-xs text-slate-300 font-sans">{v.notes}</span>}
+                <span className="ml-auto flex items-center gap-2">
+                  <a
+                    className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-slate-300 hover:bg-surface-hover hover:text-slate-100 transition-colors"
+                    href={`/api/v1${base}/export?version=${v.version}&format=jsonl`}
+                  >
+                    <Download className="h-3 w-3" />
+                    <span>Export JSONL</span>
+                  </a>
+                  <Button variant="ghost" size="sm" onClick={() => setOpen(open === v.version ? null : v.version)}>
                     {open === v.version ? "Hide cases" : "Show cases"}
                   </Button>
                 </span>
@@ -310,10 +468,13 @@ function VersionCases({ base, version }: { base: string; version: number }) {
   if (detail.error) return <ErrorState error={detail.error} />;
   if (!detail.data) return <Spinner />;
   return (
-    <ol className="mt-2 space-y-1 border-l-2 border-ink-100 pl-3 text-xs">
+    <ol className="mt-3 space-y-1.5 border-l-2 border-border pl-3 text-xs font-mono">
       {detail.data.cases.map((c) => (
-        <li key={c.id}>
-          <span className="font-mono">{c.key}</span> <span className="text-ink-500">{preview(c.input, 70)} → {preview(c.expected_output, 70)}</span>
+        <li key={c.id} className="text-slate-300">
+          <span className="text-slate-200 font-semibold">{c.key}</span>{" "}
+          <span className="text-slate-500">
+            {preview(c.input, 70)} → {preview(c.expected_output, 70)}
+          </span>
         </li>
       ))}
     </ol>
@@ -334,81 +495,120 @@ function ImportTab({ base, onChange }: { base: string; onChange: () => void }) {
     setResult(null);
     setProblems(null);
     try {
-      const r = await api<{ imported: number; draft_case_count: number }>(`${base}/import`, { method: "POST", body: { format, content, mode } });
+      const r = await api<{ imported: number; draft_case_count: number }>(`${base}/import`, {
+        method: "POST",
+        body: { format, content, mode },
+      });
       setResult(`Imported ${r.imported} case(s); the draft now has ${r.draft_case_count}.`);
       setContent("");
       onChange();
     } catch (err) {
-      if (err instanceof ApiError && Array.isArray(err.details)) setProblems({ message: err.message, details: err.details as { at: string; message: string }[] });
+      if (err instanceof ApiError && Array.isArray(err.details))
+        setProblems({ message: err.message, details: err.details as { at: string; message: string }[] });
       else setProblems({ message: (err as Error).message, details: [] });
     }
   }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-      <form onSubmit={submit} className="space-y-3 border border-ink-200 bg-white p-4">
-        <div className="flex flex-wrap items-end gap-2">
-          <Field label="Format">
-            <SelectInput value={format} onChange={(e) => setFormat(e.target.value as "jsonl" | "json")}>
-              <option value="jsonl">JSONL (one case per line)</option>
-              <option value="json">JSON array</option>
-            </SelectInput>
-          </Field>
-          <Field label="Mode">
-            <SelectInput value={mode} onChange={(e) => setMode(e.target.value as "append" | "replace")}>
-              <option value="append">Append to draft</option>
-              <option value="replace">Replace the draft</option>
-            </SelectInput>
-          </Field>
-          <label className="cursor-pointer rounded border border-ink-200 px-3 py-1.5 text-sm hover:bg-ink-50">
-            Choose file…
-            <input type="file" accept=".jsonl,.json,.ndjson,application/json" className="sr-only"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then(setContent); }} />
-          </label>
-        </div>
-        <textarea
-          aria-label="Import content"
-          className="min-h-[12rem] w-full rounded border border-ink-200 p-2 font-mono text-xs focus:border-ink-700 focus:outline-none"
-          placeholder={'{"key": "shipping", "input": {"question": "Where is my order?"}, "expected_output": "...", "expected_sources": ["kb/shipping.md"]}'}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          required
-        />
-        <Button variant="primary" type="submit">Validate and import</Button>
-        {result && <p role="status" className="text-sm text-emerald-700">{result}</p>}
-        {problems && (
-          <div role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <p className="font-semibold">{problems.message}</p>
-            {problems.details.length > 0 && (
-              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
-                {problems.details.map((d, i) => <li key={i}><span className="font-mono">{d.at}</span>: {d.message}</li>)}
-              </ul>
-            )}
+      <Card>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label="Format">
+              <SelectInput value={format} onChange={(e) => setFormat(e.target.value as "jsonl" | "json")}>
+                <option value="jsonl">JSONL (one case per line)</option>
+                <option value="json">JSON array</option>
+              </SelectInput>
+            </Field>
+            <Field label="Mode">
+              <SelectInput value={mode} onChange={(e) => setMode(e.target.value as "append" | "replace")}>
+                <option value="append">Append to draft</option>
+                <option value="replace">Replace the draft</option>
+              </SelectInput>
+            </Field>
+            <label className="cursor-pointer rounded border border-border bg-surface px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-surface-hover hover:text-slate-100 transition-colors">
+              Choose file…
+              <input
+                type="file"
+                accept=".jsonl,.json,.ndjson,application/json"
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void f.text().then(setContent);
+                }}
+              />
+            </label>
           </div>
-        )}
-      </form>
-      <div className="space-y-2 border border-ink-200 bg-white p-4 text-sm">
-        <h3 className="font-semibold">Export the draft</h3>
-        <p className="text-xs text-ink-500">Exports use the same format the importer accepts. Published versions can be exported from the Versions tab.</p>
+          <textarea
+            aria-label="Import content"
+            className="min-h-[12rem] w-full rounded border border-border bg-surface p-2.5 font-mono text-xs text-slate-100 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+            placeholder={
+              '{"key": "shipping", "input": {"question": "Where is my order?"}, "expected_output": "...", "expected_sources": ["kb/shipping.md"]}'
+            }
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            required
+          />
+          <Button variant="primary" type="submit">
+            Validate and import
+          </Button>
+          {result && <p role="status" className="text-xs text-emerald-400 font-medium">{result}</p>}
+          {problems && (
+            <div role="alert" className="rounded-lg border border-red-500/30 bg-red-950/20 p-3 text-xs text-red-200">
+              <p className="font-semibold text-red-300">{problems.message}</p>
+              {problems.details.length > 0 && (
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                  {problems.details.map((d, i) => (
+                    <li key={i}>
+                      <span className="font-mono">{d.at}</span>: {d.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </form>
+      </Card>
+
+      <Card className="space-y-3 text-sm">
+        <h3 className="font-semibold text-slate-200">Export the draft</h3>
+        <p className="text-xs text-slate-400">
+          Exports use the same format the importer accepts. Published versions can be exported from the Versions tab.
+        </p>
         <div className="flex gap-2">
-          <a className="rounded border border-ink-200 px-3 py-1.5 text-sm hover:bg-ink-50" href={`/api/v1${base}/export?format=jsonl`}>JSONL</a>
-          <a className="rounded border border-ink-200 px-3 py-1.5 text-sm hover:bg-ink-50" href={`/api/v1${base}/export?format=json`}>JSON</a>
+          <a
+            className="rounded border border-border bg-surface px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-surface-hover hover:text-slate-100 transition-colors"
+            href={`/api/v1${base}/export?format=jsonl`}
+          >
+            JSONL
+          </a>
+          <a
+            className="rounded border border-border bg-surface px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-surface-hover hover:text-slate-100 transition-colors"
+            href={`/api/v1${base}/export?format=json`}
+          >
+            JSON
+          </a>
         </div>
-        <h3 className="pt-2 font-semibold">Case fields</h3>
-        <dl className="space-y-1 text-xs text-ink-700">
+        <h3 className="pt-2 font-semibold text-slate-200">Case fields</h3>
+        <dl className="space-y-1 text-xs text-slate-400">
           <Def term="key">optional stable id</Def>
           <Def term="input">required; any JSON</Def>
           <Def term="expected_output">optional; any JSON</Def>
           <Def term="expected_sources">optional list of sources</Def>
           <Def term="metadata">optional object</Def>
         </dl>
-      </div>
+      </Card>
     </div>
   );
 }
 
 function Def({ term, children }: { term: string; children: ReactNode }) {
-  return <div><dt className="inline font-mono">{term}</dt> <dd className="inline text-ink-500">— {children}</dd></div>;
+  return (
+    <div>
+      <dt className="inline font-mono text-slate-300">{term}</dt>{" "}
+      <dd className="inline text-slate-400">— {children}</dd>
+    </div>
+  );
 }
 
 // --- evaluations ------------------------------------------------------------------------------------------
@@ -418,13 +618,51 @@ interface EvaluatorChoice {
   params: Record<string, string>;
 }
 
-const EVALUATOR_INFO: { type: string; label: string; help: string; params: { key: string; label: string; placeholder: string }[] }[] = [
-  { type: "exact_match", label: "Exact match", help: "Output equals the expected output.", params: [{ key: "field", label: "Output field", placeholder: "answer (optional)" }] },
-  { type: "normalized_match", label: "Normalized match", help: "Equal after normalizing case, whitespace and punctuation.", params: [{ key: "field", label: "Output field", placeholder: "answer (optional)" }] },
-  { type: "contains", label: "Contains keywords", help: "Output contains keywords (or the expected string).", params: [{ key: "field", label: "Output field", placeholder: "answer (optional)" }, { key: "keywords", label: "Keywords", placeholder: "comma-separated (optional)" }] },
-  { type: "json_match", label: "JSON structure", help: "Expected JSON is a structural subset of the output.", params: [{ key: "field", label: "Output field", placeholder: "(optional)" }] },
-  { type: "source_match", label: "Source references", help: "Linked trace retrieved the expected sources.", params: [{ key: "min_recall", label: "Minimum recall", placeholder: "1.0" }] },
-  { type: "required_fields", label: "Required fields", help: "Output has these non-empty fields.", params: [{ key: "fields", label: "Fields", placeholder: "answer, citations" }] },
+const EVALUATOR_INFO: {
+  type: string;
+  label: string;
+  help: string;
+  params: { key: string; label: string; placeholder: string }[];
+}[] = [
+  {
+    type: "exact_match",
+    label: "Exact match",
+    help: "Output equals the expected output.",
+    params: [{ key: "field", label: "Output field", placeholder: "answer (optional)" }],
+  },
+  {
+    type: "normalized_match",
+    label: "Normalized match",
+    help: "Equal after normalizing case, whitespace and punctuation.",
+    params: [{ key: "field", label: "Output field", placeholder: "answer (optional)" }],
+  },
+  {
+    type: "contains",
+    label: "Contains keywords",
+    help: "Output contains keywords (or the expected string).",
+    params: [
+      { key: "field", label: "Output field", placeholder: "answer (optional)" },
+      { key: "keywords", label: "Keywords", placeholder: "comma-separated (optional)" },
+    ],
+  },
+  {
+    type: "json_match",
+    label: "JSON structure",
+    help: "Expected JSON is a structural subset of the output.",
+    params: [{ key: "field", label: "Output field", placeholder: "(optional)" }],
+  },
+  {
+    type: "source_match",
+    label: "Source references",
+    help: "Linked trace retrieved the expected sources.",
+    params: [{ key: "min_recall", label: "Minimum recall", placeholder: "1.0" }],
+  },
+  {
+    type: "required_fields",
+    label: "Required fields",
+    help: "Output has these non-empty fields.",
+    params: [{ key: "fields", label: "Fields", placeholder: "answer, citations" }],
+  },
 ];
 
 function buildEvaluators(choices: Record<string, EvaluatorChoice>): Record<string, unknown>[] {
@@ -441,8 +679,14 @@ function buildEvaluators(choices: Record<string, EvaluatorChoice>): Record<strin
 
 function EvaluationsTab({ projectId, dataset }: { projectId: string; dataset: Dataset }) {
   const navigate = useNavigate();
-  const versions = useApi((signal) => api<VersionSummary[]>(`/projects/${projectId}/datasets/${dataset.id}/versions`, { signal }), [dataset.id]);
-  const runs = useApi((signal) => api<EvaluationRun[]>(`/projects/${projectId}/eval-runs`, { query: { dataset_id: dataset.id }, signal }), [dataset.id]);
+  const versions = useApi(
+    (signal) => api<VersionSummary[]>(`/projects/${projectId}/datasets/${dataset.id}/versions`, { signal }),
+    [dataset.id],
+  );
+  const runs = useApi(
+    (signal) => api<EvaluationRun[]>(`/projects/${projectId}/eval-runs`, { query: { dataset_id: dataset.id }, signal }),
+    [dataset.id],
+  );
   const [versionId, setVersionId] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -474,54 +718,92 @@ function EvaluationsTab({ projectId, dataset }: { projectId: string; dataset: Da
   }
 
   if (versions.data && versions.data.length === 0) {
-    return <EmptyState title="Publish a version first">Evaluation runs always use an exact, immutable dataset version.</EmptyState>;
+    return (
+      <EmptyState title="Publish a version first">
+        Evaluation runs always use an exact, immutable dataset version.
+      </EmptyState>
+    );
   }
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-      <form onSubmit={create} className="space-y-3 border border-ink-200 bg-white p-4" aria-label="New evaluation run">
-        <h3 className="text-sm font-semibold">New evaluation run</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Dataset version">
-            <SelectInput className="w-full" value={selectedVersion} onChange={(e) => setVersionId(e.target.value)}>
-              {versions.data?.map((v) => <option key={v.id} value={v.id}>v{v.version} · {v.case_count} cases</option>)}
-            </SelectInput>
-          </Field>
-          <Field label="Run name">
-            <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={`${dataset.name} evaluation`} maxLength={200} />
-          </Field>
-        </div>
-        <fieldset className="space-y-2">
-          <legend className="mb-1 text-xs font-medium text-ink-700">Deterministic evaluators</legend>
-          {EVALUATOR_INFO.map((info) => {
-            const choice = choices[info.type] ?? { enabled: false, params: {} };
-            return (
-              <div key={info.type} className={cx("border px-3 py-2", choice.enabled ? "border-ink-300" : "border-ink-100")}>
-                <label className="flex items-start gap-2 text-sm">
-                  <input type="checkbox" className="mt-1" checked={choice.enabled}
-                    onChange={(e) => setChoices({ ...choices, [info.type]: { ...choice, enabled: e.target.checked } })} />
-                  <span>
-                    <span className="font-medium">{info.label}</span>
-                    <span className="block text-xs text-ink-500">{info.help}</span>
-                  </span>
-                </label>
-                {choice.enabled && info.params.length > 0 && (
-                  <div className="mt-2 grid gap-2 pl-6 sm:grid-cols-2">
-                    {info.params.map((p) => (
-                      <TextInput key={p.key} aria-label={`${info.label}: ${p.label}`} placeholder={`${p.label}: ${p.placeholder}`}
-                        value={choice.params[p.key] ?? ""}
-                        onChange={(e) => setChoices({ ...choices, [info.type]: { ...choice, params: { ...choice.params, [p.key]: e.target.value } } })} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </fieldset>
-        <Button variant="primary" type="submit" disabled={!selectedVersion}>Create run</Button>
-        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-      </form>
-      <div>
-        <h3 className="mb-2 text-sm font-semibold">Runs on this dataset</h3>
+      <Card>
+        <form onSubmit={create} className="space-y-4" aria-label="New evaluation run">
+          <h3 className="text-sm font-semibold text-slate-200">New Evaluation Run</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Dataset version">
+              <SelectInput className="w-full" value={selectedVersion} onChange={(e) => setVersionId(e.target.value)}>
+                {versions.data?.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    v{v.version} · {v.case_count} cases
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Run name">
+              <TextInput
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={`${dataset.name} evaluation`}
+                maxLength={200}
+              />
+            </Field>
+          </div>
+          <fieldset className="space-y-2">
+            <legend className="mb-2 text-xs font-medium text-slate-300">Deterministic evaluators</legend>
+            {EVALUATOR_INFO.map((info) => {
+              const choice = choices[info.type] ?? { enabled: false, params: {} };
+              return (
+                <div
+                  key={info.type}
+                  className={cx(
+                    "rounded border p-2.5 transition-colors",
+                    choice.enabled ? "border-accent/40 bg-surface-raised" : "border-border bg-surface",
+                  )}
+                >
+                  <label className="flex items-start gap-2.5 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 rounded border-border bg-surface text-accent focus:ring-accent"
+                      checked={choice.enabled}
+                      onChange={(e) =>
+                        setChoices({ ...choices, [info.type]: { ...choice, enabled: e.target.checked } })
+                      }
+                    />
+                    <span>
+                      <span className="font-semibold text-slate-200">{info.label}</span>
+                      <span className="block text-2xs text-slate-400 mt-0.5">{info.help}</span>
+                    </span>
+                  </label>
+                  {choice.enabled && info.params.length > 0 && (
+                    <div className="mt-2.5 grid gap-2 pl-6 sm:grid-cols-2">
+                      {info.params.map((p) => (
+                        <TextInput
+                          key={p.key}
+                          aria-label={`${info.label}: ${p.label}`}
+                          placeholder={`${p.label}: ${p.placeholder}`}
+                          value={choice.params[p.key] ?? ""}
+                          onChange={(e) =>
+                            setChoices({
+                              ...choices,
+                              [info.type]: { ...choice, params: { ...choice.params, [p.key]: e.target.value } },
+                            })
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </fieldset>
+          <Button variant="primary" type="submit" disabled={!selectedVersion}>
+            Create run
+          </Button>
+          {error && <p role="alert" className="text-xs text-red-400 font-medium">{error}</p>}
+        </form>
+      </Card>
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-200">Runs on this dataset</h3>
         {runs.error && <ErrorState error={runs.error} onRetry={runs.reload} />}
         {runs.data && runs.data.length === 0 && <EmptyState title="No runs yet" />}
         {runs.data && runs.data.length > 0 && <RunTable projectId={projectId} runs={runs.data} />}
@@ -530,33 +812,56 @@ function EvaluationsTab({ projectId, dataset }: { projectId: string; dataset: Da
   );
 }
 
-export function RunTable({ projectId, runs, showDataset = false }: { projectId: string; runs: EvaluationRun[]; showDataset?: boolean }) {
+export function RunTable({
+  projectId,
+  runs,
+  showDataset = false,
+}: {
+  projectId: string;
+  runs: EvaluationRun[];
+  showDataset?: boolean;
+}) {
   return (
-    <div className="overflow-x-auto border border-ink-200 bg-white">
-      <table className="w-full text-sm">
-        <thead className="border-b border-ink-200 bg-ink-50 text-left text-2xs uppercase tracking-wider text-ink-500">
+    <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-sm">
+      <table className="w-full text-sm border-collapse">
+        <thead className="border-b border-border bg-surface-raised text-left text-xs font-medium text-slate-400">
           <tr>
-            <th className="px-3 py-2 font-semibold">Run</th>
-            {showDataset && <th className="px-3 py-2 font-semibold">Dataset</th>}
-            <th className="px-3 py-2 font-semibold">Status</th>
-            <th className="px-3 py-2 text-right font-semibold">Pass rate</th>
-            <th className="hidden px-3 py-2 text-right font-semibold sm:table-cell">Cases</th>
-            <th className="hidden px-3 py-2 font-semibold md:table-cell">Created</th>
+            <th className="px-3 py-2.5 font-semibold text-slate-300">Run</th>
+            {showDataset && <th className="px-3 py-2.5 font-semibold text-slate-300">Dataset</th>}
+            <th className="px-3 py-2.5 font-semibold text-slate-300">Status</th>
+            <th className="px-3 py-2.5 text-right font-semibold text-slate-300">Pass rate</th>
+            <th className="hidden px-3 py-2.5 text-right font-semibold text-slate-300 sm:table-cell">Cases</th>
+            <th className="hidden px-3 py-2.5 font-semibold text-slate-300 md:table-cell">Created</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-ink-100">
+        <tbody className="divide-y divide-border">
           {runs.map((r) => (
-            <tr key={r.id} className="hover:bg-ink-50">
-              <td className="px-3 py-2">
-                <Link to={`/projects/${projectId}/evaluations/${r.id}`} className="font-medium hover:underline">{r.name}</Link>
+            <tr key={r.id} className="hover:bg-surface-hover/80 transition-colors">
+              <td className="px-3 py-2.5">
+                <Link to={`/projects/${projectId}/evaluations/${r.id}`} className="font-medium text-slate-100 hover:text-accent-400 transition-colors">
+                  {r.name}
+                </Link>
               </td>
-              {showDataset && <td className="px-3 py-2 text-xs">{r.dataset_name} <span className="font-mono text-ink-500">v{r.dataset_version}</span></td>}
-              <td className="px-3 py-2"><RunStatusBadge status={r.status} /></td>
-              <td className="px-3 py-2 text-right font-mono text-xs tabular-nums" title={r.status === "completed" ? undefined : "Pass rate is only reported for completed runs"}>
+              {showDataset && (
+                <td className="px-3 py-2.5 text-xs text-slate-300">
+                  {r.dataset_name} <span className="font-mono text-slate-500">v{r.dataset_version}</span>
+                </td>
+              )}
+              <td className="px-3 py-2.5">
+                <RunStatusBadge status={r.status} />
+              </td>
+              <td
+                className="px-3 py-2.5 text-right font-mono text-xs tabular-nums text-slate-200"
+                title={r.status === "completed" ? undefined : "Pass rate is only reported for completed runs"}
+              >
                 {percent(r.pass_rate)}
               </td>
-              <td className="hidden px-3 py-2 text-right font-mono text-xs tabular-nums sm:table-cell">{r.received_cases}/{r.total_cases}</td>
-              <td className="hidden px-3 py-2 text-xs text-ink-500 md:table-cell" title={formatTimestamp(r.created_at)}>{formatRelative(r.created_at)}</td>
+              <td className="hidden px-3 py-2.5 text-right font-mono text-xs tabular-nums text-slate-300 sm:table-cell">
+                {r.received_cases}/{r.total_cases}
+              </td>
+              <td className="hidden px-3 py-2.5 text-xs text-slate-400 md:table-cell" title={formatTimestamp(r.created_at)}>
+                {formatRelative(r.created_at)}
+              </td>
             </tr>
           ))}
         </tbody>

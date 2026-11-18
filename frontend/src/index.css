@@ -1,16 +1,206 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
-    font-feature-settings: "tnum" 0, "cv11" 1;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: dark;
   }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
   body {
-    @apply bg-ink-50 font-sans text-ink-900;
+    @apply bg-app font-sans text-slate-100;
+    font-size: 14px;
+    line-height: 1.5;
   }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.01em;
+  }
+
+  /* Numbers line up in tables and metrics. */
+  table,
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    @apply bg-accent-900 text-slate-50;
+  }
+
   :focus-visible {
-    @apply outline-ink-900;
+    @apply outline-none ring-2 ring-accent-500/60 ring-offset-1 ring-offset-app;
   }
+}
+
+/* --- Background layers (components/Backdrop.tsx): static, no animation --- */
+
+/* Faint grid that fades out towards the edges. */
+.tf-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 25%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 25%, #000 35%, transparent 100%);
+}
+
+/* Soft lime light from the top, a little cyan from the lower left. */
+.tf-glow {
+  background:
+    radial-gradient(900px 420px at 70% -15%, rgba(184, 255, 0, 0.045), transparent 70%),
+    radial-gradient(700px 500px at -5% 105%, rgba(0, 229, 255, 0.03), transparent 70%);
+}
+
+.tf-glow-vivid {
+  background:
+    radial-gradient(1000px 520px at 75% -15%, rgba(184, 255, 0, 0.09), transparent 70%),
+    radial-gradient(800px 560px at 0% 60%, rgba(0, 229, 255, 0.055), transparent 70%);
+}
+
+.tf-vignette {
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(5, 5, 7, 0.6) 100%);
+}
+
+/* Glass panel: translucent surface with a hairline top highlight. */
+.tf-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 24px 60px -24px rgba(0, 0, 0, 0.8);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* Small dot matrix inside panels. */
+.tf-dots {
+  background-image: radial-gradient(rgba(184, 255, 0, 0.14) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+/* Lime word with a cyan underline, for hero headlines. */
+.tf-signal-text {
+  color: #b8ff00;
+  text-decoration: underline;
+  text-decoration-color: #00e5ff;
+  text-decoration-thickness: 3px;
+  text-underline-offset: 10px;
+}
+
+/* Lime-to-cyan text, for the author name. */
+.tf-signal-gradient {
+  background: linear-gradient(95deg, #cbff47 0%, #b8ff00 45%, #00e5ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes tf-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.tf-marquee {
+  animation: tf-marquee 40s linear infinite;
+}
+
+@keyframes tf-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.tf-blink {
+  animation: tf-blink 1.4s steps(2, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-marquee,
+  .tf-blink {
+    animation: none;
+  }
+}
+
+/* Waterfall bars in the sign-in hero grow in, then breathe. */
+@keyframes tf-bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes tf-bar-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+.tf-bar {
+  transform-origin: left center;
+  animation:
+    tf-bar-grow 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both,
+    tf-bar-breathe 3.2s ease-in-out 1s infinite;
+}
+
+@keyframes tf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tf-rise {
+  animation: tf-rise 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-bar,
+  .tf-rise {
+    animation: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded bg-slate-800;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-700;
 }

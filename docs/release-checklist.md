@@ -85,7 +85,7 @@ schema. The startup line names the database and revision (never credentials). St
 ## The main database
 
 `traceforge` is never used or migrated implicitly. It was last verified at schema revision **0001** (milestone M7;
-it has deliberately not been connected to since); the code needs **0005**, so `python -m app.serve --database main`
+it has deliberately not been connected to since); the code needs **0006**, so `python -m app.serve --database main`
 refuses to start until it is migrated. To adopt it:
 
 1. Stop every Traceforge server.

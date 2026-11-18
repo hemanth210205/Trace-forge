@@ -13,7 +13,7 @@ from app.models.evaluation import (
 from app.models.experiment import Experiment, ExperimentDecision
 from app.models.project import Project, ProjectApiKey
 from app.models.trace import Span, Trace
-from app.models.user import User, UserSession
+from app.models.user import OAuthIdentity, User, UserSession
 
 __all__ = [
     "AuditLog",
@@ -28,6 +28,7 @@ __all__ = [
     "EvaluationRun",
     "Experiment",
     "ExperimentDecision",
+    "OAuthIdentity",
     "Project",
     "ProjectApiKey",
     "Span",

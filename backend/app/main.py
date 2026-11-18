@@ -19,6 +19,7 @@ from app.core.rate_limit import LoginRateLimiter
 from app.db.schema import ensure_current
 from app.db.session import make_engine, make_sessionmaker
 from app.frontend import frontend_route
+from app.services.oauth import urllib_fetch
 from app.services.recovery import RecoveryWorker
 
 API_PREFIX = "/api/v1"
@@ -79,6 +80,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         window_seconds=settings.login_failure_window_seconds,
         max_keys=settings.login_limiter_max_keys,
     )
+
+    # Provider HTTP for Google/GitHub sign-in; tests replace it with a fake.
+    app.state.oauth_fetch = urllib_fetch
 
     install_error_handlers(app)
 

@@ -30,7 +30,7 @@ TABLES = (
     "experiment_decisions", "experiments",
     "diagnosis_hypotheses", "diagnosis_cases", "diagnoses",
     "evaluation_results", "evaluation_runs", "dataset_version_cases", "dataset_versions", "dataset_cases", "datasets",
-    "spans", "traces", "audit_log", "project_api_keys", "projects", "sessions", "users",
+    "spans", "traces", "audit_log", "project_api_keys", "projects", "oauth_identities", "sessions", "users",
 )
 PASSWORD = "correct horse battery staple"
 

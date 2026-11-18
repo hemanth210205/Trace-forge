@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from fastapi import APIRouter, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -20,8 +21,9 @@ from app.core.rate_limit import RateLimited
 from app.core.security import csrf_token_for, hash_password, new_session_token, sha256_hex, verify_password
 from app.db.base import utcnow
 from app.db.errors import constraint_name
-from app.models import User, UserSession
+from app.models import OAuthIdentity, User, UserSession
 from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserOut
+from app.services import oauth
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -133,3 +135,93 @@ def logout(ctx: CsrfAuth, db: DbSession, settings: AppSettings) -> Response:
 def me(ctx: CurrentAuth, response: Response, settings: AppSettings) -> AuthResponse:
     response.headers["Cache-Control"] = "no-store"
     return _auth_response(ctx.user, ctx.token, settings)
+
+
+# --- Sign in with Google / GitHub (see app/services/oauth.py) -------------------------------------------------
+
+OAUTH_COOKIE_PATH = "/api/v1/auth/oauth"
+
+
+@router.get("/providers", summary="Sign-in providers configured on this server")
+def providers(settings: AppSettings) -> dict[str, list[str]]:
+    return {"providers": settings.oauth_providers}
+
+
+def _login_redirect(settings: Settings, code: str) -> RedirectResponse:
+    response = RedirectResponse(f"{settings.public_origin}/login?oauth_error={code}", status_code=status.HTTP_303_SEE_OTHER)
+    response.delete_cookie(oauth.STATE_COOKIE, path=OAUTH_COOKIE_PATH)
+    return response
+
+
+@router.get("/oauth/{provider}/start", summary="Start signing in with a provider (browser redirect)", include_in_schema=True)
+def oauth_start(provider: str, settings: AppSettings, next: str | None = None) -> RedirectResponse:
+    try:
+        spec = oauth.provider_for(provider, settings)
+    except oauth.OAuthError as exc:
+        return _login_redirect(settings, exc.code)
+    cookie, state, challenge = oauth.new_state(spec, oauth.safe_next(next), settings)
+    response = RedirectResponse(oauth.authorize_location(spec, settings, state, challenge), status_code=status.HTTP_303_SEE_OTHER)
+    response.set_cookie(
+        oauth.STATE_COOKIE, cookie, max_age=oauth.STATE_TTL_SECONDS, path=OAUTH_COOKIE_PATH,
+        httponly=True, secure=settings.cookie_secure, samesite="lax",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@router.get("/oauth/{provider}/callback", summary="Provider callback: finish signing in (browser redirect)")
+def oauth_callback(
+    provider: str,
+    request: Request,
+    db: DbSession,
+    settings: AppSettings,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    try:
+        spec = oauth.provider_for(provider, settings)
+        if error:
+            raise oauth.OAuthError("denied" if error == "access_denied" else "provider_error")
+        stored = oauth.read_state(request.cookies.get(oauth.STATE_COOKIE), spec, state, settings)
+        if not code:
+            raise oauth.OAuthError("provider_error")
+        profile = oauth.fetch_profile(spec, code, stored.get("v"), settings, request.app.state.oauth_fetch)
+        user = _user_for_profile(db, spec.name, profile)
+        if not user.is_active:
+            raise oauth.OAuthError("inactive")
+    except oauth.OAuthError as exc:
+        db.rollback()
+        return _login_redirect(settings, exc.code)
+
+    response = RedirectResponse(f"{settings.public_origin}{oauth.safe_next(stored.get('n'))}", status_code=status.HTTP_303_SEE_OTHER)
+    _start_session(db, user, settings, response)
+    db.commit()
+    response.delete_cookie(oauth.STATE_COOKIE, path=OAUTH_COOKIE_PATH)
+    return response
+
+
+def _user_for_profile(db: DbSession, provider: str, profile: oauth.Profile) -> User:
+    """The linked user; else the account with this verified email (linked now); else a new password-less account."""
+    identity = db.scalar(select(OAuthIdentity).where(OAuthIdentity.provider == provider, OAuthIdentity.subject == profile.subject))
+    if identity is not None:
+        user = db.get(User, identity.user_id)
+        assert user is not None
+        return user
+    email = profile.email.strip().lower()
+    if not email or len(email) > 320 or "@" not in email:
+        raise oauth.OAuthError("email_unverified")
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None:
+        name = (profile.name.strip() or email.split("@", 1)[0])[:100]
+        user = User(email=email, password_hash=None, display_name=name)
+        db.add(user)
+        db.flush()
+    db.add(OAuthIdentity(user_id=user.id, provider=provider, subject=profile.subject, email=email))
+    try:
+        db.flush()
+    except IntegrityError:
+        # A concurrent callback linked the same provider account first.
+        db.rollback()
+        raise oauth.OAuthError("try_again") from None
+    return user
