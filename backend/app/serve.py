@@ -35,7 +35,8 @@ import uvicorn
 # already records every request with its path only, so nothing is lost.
 SERVER_OPTIONS: dict[str, Any] = {"proxy_headers": False, "forwarded_allow_ips": [], "access_log": False}
 VITE_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")  # the Vite dev server (npm run dev)
-# Traceforge is a localhost-only product (plain HTTP, in-process limiter and recovery): no other bind address.
+# Loopback only by default. Another address is accepted only with TRACEFORGE_PUBLIC_BIND=true behind a platform
+# TLS proxy, for the main database (see main() below and DEPLOY.md).
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
 
 
@@ -56,7 +57,14 @@ def prepare(choice: str) -> str:
         print(exc, file=sys.stderr)
         raise SystemExit(2) from None
     name = database_name(url)
-    if selected == "main":
+    if selected == "main" and settings.migrate_main_on_start:
+        # Platforms without a shell or pre-deploy step (Render's free plan): upgrade at start, confirmed by name.
+        if settings.migrate_main_on_start != name:
+            print(f"Refusing to start: TRACEFORGE_MIGRATE_MAIN_ON_START must be the main database's exact name "
+                  f"({name!r}) to migrate it at start.", file=sys.stderr)
+            raise SystemExit(2)
+        revision = migrate_to_head(url, url, confirm=name)
+    elif selected == "main":
         engine = create_engine(url, connect_args=CONNECT_ARGS)
         try:
             revision = ensure_current(engine, name)
@@ -82,14 +90,22 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.serve", description="Run Traceforge (API and console).")
     parser.add_argument("--database", choices=("dev", "test", "main"), default="dev",
                         help="dev: DEV_DATABASE_URL (default); test: TEST_DATABASE_URL; main: DATABASE_URL (explicit only)")
-    parser.add_argument("--host", default="127.0.0.1", help="Loopback bind address: 127.0.0.1 (default), localhost or ::1.")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="Loopback bind address: 127.0.0.1 (default), localhost or ::1. Another address needs "
+                             "TRACEFORGE_PUBLIC_BIND=true and --database main.")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--reload", action="store_true", help="Restart on code changes (development).")
     args = parser.parse_args(argv)
     if args.host not in LOOPBACK_HOSTS:
-        print(f"Refusing to start: Traceforge only serves on loopback ({', '.join(LOOPBACK_HOSTS)}), not {args.host!r}. "
-              "Networked deployment is not supported.", file=sys.stderr)
-        raise SystemExit(2)
+        from app.core.config import get_settings
+
+        # Only behind a hosting platform's TLS proxy, explicitly enabled, and only for the main database
+        # (TRACEFORGE_PUBLIC_BIND; the settings refuse it without trusted proxies and secure cookies).
+        if not get_settings().public_bind or args.database != "main":
+            print(f"Refusing to start: Traceforge only serves on loopback ({', '.join(LOOPBACK_HOSTS)}), not {args.host!r}. "
+                  "Behind a hosting platform's proxy, set TRACEFORGE_PUBLIC_BIND=true (see DEPLOY.md) and use "
+                  "--database main.", file=sys.stderr)
+            raise SystemExit(2)
     description = prepare(args.database)
 
     from app.core.config import get_settings

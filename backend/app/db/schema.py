@@ -14,10 +14,12 @@ from app.db.session import CONNECT_ARGS
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
-def alembic_config(url: str) -> Config:
+def alembic_config(url: str, *, confirm: str | None = None) -> Config:
     config = Config(str(BACKEND_DIR / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
     config.attributes["configure_logger"] = False
+    # Read by alembic/env.py's own guard, which checks the target again before connecting.
+    config.attributes["confirm"] = confirm
     return config
 
 
@@ -45,9 +47,11 @@ def ensure_current(engine: Engine, database: str | None) -> str:
     return current or "base"
 
 
-def migrate_to_head(url: str, main_url: str) -> str:
-    """Upgrades a dev or test database to head (the name guard refuses every other database)."""
-    check_migration_target(url, main_url)
+def migrate_to_head(url: str, main_url: str, *, confirm: str | None = None) -> str:
+    """Upgrades a dev or test database to head (the name guard refuses every other database). The main database is
+    accepted only with ``confirm`` equal to its exact name. Only ever upgrades: a database at a revision this code
+    does not know (newer code was deployed before) makes Alembic fail instead of guessing."""
+    check_migration_target(url, main_url, confirm=confirm)
     engine = create_engine(url, connect_args=CONNECT_ARGS)
     try:
         current = current_revision(engine)
@@ -55,5 +59,5 @@ def migrate_to_head(url: str, main_url: str) -> str:
         engine.dispose()
     head = head_revision()
     if current != head:
-        command.upgrade(alembic_config(url), "head")
+        command.upgrade(alembic_config(url, confirm=confirm), "head")
     return head or "base"

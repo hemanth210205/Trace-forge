@@ -27,7 +27,9 @@ def _database_url() -> str:
     settings = get_settings()
     args = context.get_x_argument(as_dictionary=True)
     url = config.get_main_option("sqlalchemy.url") or resolve_database_url(settings, parse_choice(args.get("database")))
-    check_migration_target(url, settings.database_url.get_secret_value(), confirm=args.get("confirm"))
+    # Confirmation from the CLI (-x confirm=<name>) or from a programmatic caller (app.db.schema.alembic_config).
+    confirm = args.get("confirm") or config.attributes.get("confirm")
+    check_migration_target(url, settings.database_url.get_secret_value(), confirm=confirm)
     return url
 
 

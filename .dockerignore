@@ -1,0 +1,34 @@
+# Keep secrets, local state and anything the image does not need out of the build context.
+**/.env
+**/.env.*
+.git
+.gitignore
+.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/node_modules
+**/*.egg-info
+.vscode
+**/.vscode
+
+# Built inside the image instead
+frontend/dist
+
+# Tests, QA and tooling are not part of the running service
+backend/tests
+frontend/e2e
+frontend/e2e-release
+frontend/test-results
+frontend/playwright-report
+frontend/qa
+qa
+agents
+examples
+sdk
+docs
+docker
+customer-support-agent
+deploy/Caddyfile
+deploy/traceforge.service
+deploy/.env.production.example

@@ -776,6 +776,7 @@ Traceforge 0.1.0 is a **single-user, single-process, localhost-only** applicatio
 | Binding to `127.0.0.1`, `localhost` or `::1` | Binding to `0.0.0.0` or a LAN address, port forwarding, tunnels |
 | Plain HTTP on loopback | Exposing the server itself to a network |
 | One server behind a TLS reverse proxy on the same machine ([DEPLOY.md](DEPLOY.md)) | Proxies on other machines that you do not control |
+| Render's free plan, one instance (`render.yaml`, [DEPLOY.md](DEPLOY.md#render-free-plan)) | Several instances |
 | PostgreSQL 16 in the bundled Docker container | Shared or remote database servers |
 
 Why: the server has no TLS of its own, and the login rate limiter and the recovery sweep live inside the server

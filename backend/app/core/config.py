@@ -92,6 +92,13 @@ class Settings(BaseSettings):
     registration_domains: str = Field(default="", validation_alias="TRACEFORGE_REGISTRATION_DOMAINS")
     invitation_ttl_days: int = Field(default=7, ge=1, le=90, validation_alias="TRACEFORGE_INVITATION_TTL_DAYS")
 
+    # Hosting platforms without a shell or pre-deploy step (Render's free plan). Both are off by default.
+    # public_bind: allow `app.serve --host 0.0.0.0` behind the platform's TLS proxy (requires trusted proxies and
+    # secure cookies). migrate_main_on_start: the main database's exact name, as confirmation, to upgrade it to head
+    # when the server starts (upgrades only; never downgrades). Anything else, including "true", is refused.
+    public_bind: bool = Field(default=False, validation_alias="TRACEFORGE_PUBLIC_BIND")
+    migrate_main_on_start: str = Field(default="", validation_alias="TRACEFORGE_MIGRATE_MAIN_ON_START")
+
     @field_validator("secret_key", "api_key_pepper")
     @classmethod
     def _long_enough(cls, value: SecretStr) -> SecretStr:
@@ -110,10 +117,33 @@ class Settings(BaseSettings):
             raise ValueError(f"must be comma-separated IP addresses or CIDR ranges ({exc})") from None
         return value
 
+    @field_validator("database_url", "test_database_url", "dev_database_url", mode="before")
+    @classmethod
+    def _psycopg_driver(cls, value: object) -> object:
+        """Hosting platforms (Render, Heroku and others) hand out ``postgres://`` or ``postgresql://`` URLs; SQLAlchemy
+        needs the driver named. Only the scheme is rewritten; host, credentials and parameters are untouched."""
+        raw = value.get_secret_value() if isinstance(value, SecretStr) else value
+        if isinstance(raw, str):
+            for prefix in ("postgres://", "postgresql://"):
+                if raw.startswith(prefix):
+                    return "postgresql+psycopg://" + raw[len(prefix):]
+        return value
+
     @model_validator(mode="after")
     def _domains_for_domain_mode(self) -> "Settings":
         if self.registration == "domain" and not self.registration_domain_list:
             raise ValueError("TRACEFORGE_REGISTRATION=domain needs TRACEFORGE_REGISTRATION_DOMAINS (e.g. example.com)")
+        return self
+
+    @model_validator(mode="after")
+    def _public_bind_needs_a_proxy(self) -> "Settings":
+        # Listening on a public interface is only safe when a TLS-terminating platform proxy is the only way in:
+        # without trusted proxies the rate limiter sees one address for everyone, and without secure cookies sessions
+        # would travel in clear text.
+        if self.public_bind and (not self.trusted_proxies.strip() or not self.cookie_secure):
+            raise ValueError(
+                "TRACEFORGE_PUBLIC_BIND=true requires TRACEFORGE_TRUSTED_PROXIES and TRACEFORGE_COOKIE_SECURE=true"
+            )
         return self
 
     @property
