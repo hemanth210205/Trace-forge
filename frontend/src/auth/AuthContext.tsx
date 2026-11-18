@@ -7,7 +7,7 @@ interface AuthValue {
   user: User | null;
   ready: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<void>;
+  register: (email: string, password: string, displayName: string, inviteCode?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -39,11 +39,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       login: async (email, password) => accept(await api<AuthResponse>("/auth/login", { method: "POST", body: { email, password } })),
-      register: async (email, password, displayName) =>
+      register: async (email, password, displayName, inviteCode) =>
         accept(
           await api<AuthResponse>("/auth/register", {
             method: "POST",
-            body: { email, password, display_name: displayName },
+            body: { email, password, display_name: displayName, ...(inviteCode ? { invite_code: inviteCode } : {}) },
           }),
         ),
       logout: async () => {

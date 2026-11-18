@@ -10,7 +10,8 @@ means, what is and is not supported, and what to check before calling a build re
 | One `python -m app.serve` process on the same machine as the browser | Several API processes or workers against one database |
 | Binding to loopback (`127.0.0.1`, `localhost`, `::1`) | Binding to `0.0.0.0` or a LAN address (`app.serve` refuses), port forwarding, tunnels |
 | Plain HTTP on loopback | Exposing the server to a network, with or without HTTPS |
-| Requests whose `Host` is `127.0.0.1` or `localhost` | Any other host name (400), reverse proxies (`X-Forwarded-*` is ignored) |
+| Requests whose `Host` is `127.0.0.1` or `localhost` | Any other host name (400) unless listed in `TRACEFORGE_ALLOWED_HOSTS` |
+| One TLS reverse proxy on the same machine, listed in `TRACEFORGE_TRUSTED_PROXIES` ([DEPLOY.md](../DEPLOY.md)) | Forwarded headers from any other peer (always ignored) |
 | PostgreSQL 16 in the bundled Docker container on `127.0.0.1:5433` | Shared or remote database servers |
 
 Why multi-process and networked deployment are unsupported (not merely untested):
@@ -19,7 +20,8 @@ Why multi-process and networked deployment are unsupported (not merely untested)
 - The recovery sweep and diagnosis background tasks run in the server process; with several processes they would
   still be correct at the row level (locks, `SKIP LOCKED`), but this has not been designed or tested.
 - There is no TLS, so session cookies and API keys would cross the network in clear text.
-- Registration is open to anyone who can reach the server, and the 409 for a taken email reveals accounts.
+- Registration is open by default (`TRACEFORGE_REGISTRATION=open`), and the 409 for a taken email reveals accounts;
+  use `invite` or `disabled` on a public server.
 
 ## Security assumptions (localhost)
 
@@ -85,7 +87,7 @@ schema. The startup line names the database and revision (never credentials). St
 ## The main database
 
 `traceforge` is never used or migrated implicitly. It was last verified at schema revision **0001** (milestone M7;
-it has deliberately not been connected to since); the code needs **0006**, so `python -m app.serve --database main`
+it has deliberately not been connected to since); the code needs **0007**, so `python -m app.serve --database main`
 refuses to start until it is migrated. To adopt it:
 
 1. Stop every Traceforge server.

@@ -15,6 +15,7 @@ from app.api.deps import (
     DbSession,
     LoginLimiter,
 )
+from app.core import proxy
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.rate_limit import RateLimited
@@ -22,8 +23,8 @@ from app.core.security import csrf_token_for, hash_password, new_session_token, 
 from app.db.base import utcnow
 from app.db.errors import constraint_name
 from app.models import OAuthIdentity, User, UserSession
-from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserOut
-from app.services import oauth
+from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserOut, canonical_email
+from app.services import invitations, oauth
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -54,12 +55,17 @@ def _start_session(db: DbSession, user: User, settings: Settings, response: Resp
     summary="Create an account and start a session",
     dependencies=COOKIE_ISSUING_GUARDS,
     responses={
-        403: {"description": "Untrusted Origin"},
+        403: {"description": "Untrusted Origin, or registration refused by TRACEFORGE_REGISTRATION"},
         409: {"description": "Email already registered"},
         415: {"description": "Body is not application/json"},
     },
 )
 def register(body: RegisterRequest, response: Response, db: DbSession, settings: AppSettings) -> AuthResponse:
+    # Policy first: a closed server must not reveal which emails are registered (no 409 before the 403).
+    try:
+        invitations.check_before_create(settings, body.email, has_code=bool(body.invite_code), verified_email=False)
+    except invitations.RegistrationRefused as exc:
+        raise AppError(403, exc.code, exc.message) from None
     user = User(email=body.email, password_hash=hash_password(body.password), display_name=body.display_name)
     db.add(user)
     try:
@@ -69,6 +75,12 @@ def register(body: RegisterRequest, response: Response, db: DbSession, settings:
         if constraint_name(exc) == "uq_users_email":
             raise AppError(409, "email_taken", "An account with this email already exists.") from None
         raise
+    try:
+        # Same transaction as the new account: both are committed together or not at all.
+        invitations.consume_for_new_account(db, settings, user, code=body.invite_code, verified_email=False)
+    except invitations.RegistrationRefused as exc:
+        db.rollback()
+        raise AppError(403, exc.code, exc.message) from None
     token = _start_session(db, user, settings, response)
     db.commit()
     return _auth_response(user, token, settings)
@@ -94,8 +106,9 @@ def login(
     settings: AppSettings,
     limiter: LoginLimiter,
 ) -> AuthResponse:
-    # The direct ASGI peer address. Forwarded headers are never consulted (see app/serve.py).
-    client_ip = request.client.host if request.client else "unknown"
+    # The direct peer, or the client behind a configured trusted proxy (app/core/proxy.py). Forwarded headers from
+    # anyone else are ignored, so a client cannot pick its own address and get a fresh rate-limit budget.
+    client_ip = proxy.client_ip(request, settings.trusted_proxy_networks)
     # Reserved atomically in both budgets before any password work, so concurrent requests cannot overshoot
     # the budget and a throttled client cannot keep the argon2 hasher busy.
     try:
@@ -147,6 +160,12 @@ def providers(settings: AppSettings) -> dict[str, list[str]]:
     return {"providers": settings.oauth_providers}
 
 
+@router.get("/registration", summary="Who may create an account on this server")
+def registration(settings: AppSettings) -> dict[str, str]:
+    """``open``, ``disabled``, ``domain`` or ``invite``; the console adapts the sign-up form. Domains are not listed."""
+    return {"mode": settings.registration}
+
+
 def _login_redirect(settings: Settings, code: str) -> RedirectResponse:
     response = RedirectResponse(f"{settings.public_origin}/login?oauth_error={code}", status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie(oauth.STATE_COOKIE, path=OAUTH_COOKIE_PATH)
@@ -187,7 +206,7 @@ def oauth_callback(
         if not code:
             raise oauth.OAuthError("provider_error")
         profile = oauth.fetch_profile(spec, code, stored.get("v"), settings, request.app.state.oauth_fetch)
-        user = _user_for_profile(db, spec.name, profile)
+        user = _user_for_profile(db, settings, spec.name, profile)
         if not user.is_active:
             raise oauth.OAuthError("inactive")
     except oauth.OAuthError as exc:
@@ -201,22 +220,37 @@ def oauth_callback(
     return response
 
 
-def _user_for_profile(db: DbSession, provider: str, profile: oauth.Profile) -> User:
+def _user_for_profile(db: DbSession, settings: Settings, provider: str, profile: oauth.Profile) -> User:
     """The linked user; else the account with this verified email (linked now); else a new password-less account."""
     identity = db.scalar(select(OAuthIdentity).where(OAuthIdentity.provider == provider, OAuthIdentity.subject == profile.subject))
     if identity is not None:
         user = db.get(User, identity.user_id)
         assert user is not None
         return user
-    email = profile.email.strip().lower()
+    # The same canonical form registration stores, so both paths agree on one address.
+    email = canonical_email(profile.email)
     if not email or len(email) > 320 or "@" not in email:
         raise oauth.OAuthError("email_unverified")
     user = db.scalar(select(User).where(User.email == email))
     if user is None:
+        # A new account: the registration policy applies exactly as for the password form.
+        try:
+            invitations.check_before_create(settings, email, has_code=False, verified_email=True)
+        except invitations.RegistrationRefused as exc:
+            raise oauth.OAuthError(exc.code) from None
         name = (profile.name.strip() or email.split("@", 1)[0])[:100]
         user = User(email=email, password_hash=None, display_name=name)
         db.add(user)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            # A concurrent sign-in created this account between the lookup above and this insert.
+            db.rollback()
+            raise oauth.OAuthError("try_again") from None
+        try:
+            invitations.consume_for_new_account(db, settings, user, code=None, verified_email=True)
+        except invitations.RegistrationRefused as exc:
+            raise oauth.OAuthError(exc.code) from None
     db.add(OAuthIdentity(user_id=user.id, provider=provider, subject=profile.subject, email=email))
     try:
         db.flush()

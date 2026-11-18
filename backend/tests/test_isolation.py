@@ -39,7 +39,8 @@ BODIES: dict[tuple[str, str], Any] = {
 NOT_ID_SCOPED = {"/health", "/auth/register", "/auth/login", "/auth/logout", "/auth/me", "/projects", "/api-keys/self",
                  "/ingest/batch", "/sdk/eval-runs",
                  # Sign-in providers: no project involved (tests/test_oauth.py).
-                 "/auth/providers", "/auth/oauth/{provider}/start", "/auth/oauth/{provider}/callback"}
+                 "/auth/providers", "/auth/registration", "/auth/oauth/{provider}/start",
+                 "/auth/oauth/{provider}/callback"}
 
 
 @pytest.fixture

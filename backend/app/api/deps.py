@@ -9,6 +9,7 @@ from fastapi.security import APIKeyCookie, APIKeyHeader, HTTPAuthorizationCreden
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import proxy
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.rate_limit import LoginRateLimiter
@@ -76,7 +77,8 @@ def require_trusted_origin(request: Request, settings: AppSettings) -> None:
     trusted = {o.lower() for o in settings.cors_origin_list}
     host = request.headers.get("host")
     if host:
-        trusted.add(f"{request.url.scheme}://{host}".lower())
+        # Behind a trusted TLS-terminating proxy the browser's origin is https even though this hop is http.
+        trusted.add(f"{proxy.request_scheme(request, settings.trusted_proxy_networks)}://{host}".lower())
     if origin is None or origin.rstrip("/").lower() not in trusted:
         raise AppError(403, "untrusted_origin", "Request origin is not allowed.")
 

@@ -20,6 +20,7 @@ def test_openapi_documents_every_m2_route_and_security_scheme(client: ApiClient)
         "/api/v1/auth/logout",
         "/api/v1/auth/me",
         "/api/v1/auth/providers",
+        "/api/v1/auth/registration",
         "/api/v1/auth/oauth/{provider}/start",
         "/api/v1/auth/oauth/{provider}/callback",
         "/api/v1/projects",

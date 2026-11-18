@@ -84,6 +84,10 @@ export function oauthErrorMessage(code: string | null): string | null {
     state_expired: "The sign-in link expired. Please try again.",
     email_unverified: "That account has no verified email address. Verify it with the provider, then try again.",
     inactive: "This account is disabled.",
+    registration_closed: "New accounts cannot be created on this server. Ask the administrator for one.",
+    domain_not_allowed: "Accounts with that email domain cannot be created here.",
+    invitation_required: "An invitation is required to create an account.",
+    invitation_invalid: "No valid invitation was found for that email address.",
   };
   return messages[code] ?? "Could not complete sign-in with the provider. Please try again.";
 }

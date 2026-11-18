@@ -333,6 +333,18 @@ with the provider. Only provider-verified emails are accepted. A first sign-in c
 or links the existing account with that email; afterwards the provider account is recognised by its id. The flow uses
 a signed, 10-minute `state` cookie (and PKCE for Google), and returns only to local paths.
 
+### Reverse proxy and registration
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `TRACEFORGE_TRUSTED_PROXIES` | IPs or CIDRs whose `X-Forwarded-For` / `X-Forwarded-Proto` are believed. Anyone else's forwarded headers are ignored. | *empty* (none) |
+| `TRACEFORGE_REGISTRATION` | Who may create accounts, by password or Google/GitHub: `open`, `disabled`, `domain` or `invite`. Existing accounts can always sign in. | `open` |
+| `TRACEFORGE_REGISTRATION_DOMAINS` | Allowed email domains for `domain` mode, comma-separated | *empty* |
+| `TRACEFORGE_INVITATION_TTL_DAYS` | Default lifetime of an invitation | `7` |
+
+Accounts and invitations are managed on the server with `python -m app.accounts` (`user create`, `invite create`,
+`invite list`, `invite revoke`, `invite prune`); see [DEPLOY.md](DEPLOY.md#7-create-the-first-account).
+
 ### Login rate limiting
 
 | Variable | Description | Default |
@@ -615,6 +627,7 @@ All endpoints are under `/api/v1`. Interactive docs: `http://127.0.0.1:8000/api/
 | --- | --- | --- |
 | Health | `GET /health` | None |
 | Auth | `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Session |
+| Registration mode | `GET /auth/registration` | None |
 | Sign-in providers | `GET /auth/providers`; `GET /auth/oauth/{provider}/start`, `GET /auth/oauth/{provider}/callback` (browser redirects) | None |
 | Projects | `GET`, `POST /projects`; `GET`, `PATCH`, `DELETE /projects/{id}` | Session |
 | API keys | `GET`, `POST /projects/{id}/api-keys`; `DELETE /projects/{id}/api-keys/{key_id}` | Session |
@@ -761,11 +774,13 @@ Traceforge 0.1.0 is a **single-user, single-process, localhost-only** applicatio
 | --- | --- |
 | One `python -m app.serve` process on the same machine as the browser | Several API processes or workers sharing one database |
 | Binding to `127.0.0.1`, `localhost` or `::1` | Binding to `0.0.0.0` or a LAN address, port forwarding, tunnels |
-| Plain HTTP on loopback | Exposing the server to a network, with or without HTTPS |
+| Plain HTTP on loopback | Exposing the server itself to a network |
+| One server behind a TLS reverse proxy on the same machine ([DEPLOY.md](DEPLOY.md)) | Proxies on other machines that you do not control |
 | PostgreSQL 16 in the bundled Docker container | Shared or remote database servers |
 
-Why: there is no TLS, registration is open to anyone who can reach the server, and the login rate limiter and the
-recovery sweep live inside the server process.
+Why: the server has no TLS of its own, and the login rate limiter and the recovery sweep live inside the server
+process. For a public server, follow [DEPLOY.md](DEPLOY.md): Caddy terminates TLS, `TRACEFORGE_TRUSTED_PROXIES` lets
+the rate limiter see real client addresses, and `TRACEFORGE_REGISTRATION` controls who may create accounts.
 
 If you start the server with Uvicorn directly instead of `app.serve`, you **must** pass `--no-proxy-headers`:
 

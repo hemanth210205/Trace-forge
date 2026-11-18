@@ -267,3 +267,27 @@ def test_migrations_match_the_models(engine: Engine) -> None:
     with engine.connect() as conn:
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
     assert diff == []
+
+
+def test_concurrent_creation_of_the_same_account_is_a_clean_retry(
+    client: ApiClient, providers: FakeProviders, engine: Engine, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two callbacks for one new email: the second insert hits the unique email. It must not be a 500."""
+    from app.services import invitations as invitations_service
+
+    original = invitations_service.check_before_create
+
+    def concurrent_signup(*args: Any, **kwargs: Any) -> None:
+        original(*args, **kwargs)
+        # Another request commits the same account right after this one found no account.
+        with Session(engine) as other:
+            other.add(User(email="ada@example.com", password_hash=None, display_name="First"))
+            other.commit()
+
+    monkeypatch.setattr(invitations_service, "check_before_create", concurrent_signup)
+    assert sign_in(client, "github") == f"{PUBLIC}/login?oauth_error=try_again"
+    assert client.get(ME).status_code == 401
+    db.expire_all()
+    assert db.scalar(select(OAuthIdentity)) is None  # nothing half-linked
+    monkeypatch.setattr(invitations_service, "check_before_create", original)
+    assert sign_in(client, "github") == f"{PUBLIC}/"  # the retry links to the account that now exists

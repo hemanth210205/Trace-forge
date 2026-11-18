@@ -1,0 +1,61 @@
+# Caddy reverse proxy for Traceforge (see DEPLOY.md). Install as /etc/caddy/Caddyfile and replace the domain.
+#
+# Caddy obtains and renews the TLS certificate automatically (ports 80 and 443 must reach this server) and
+# redirects HTTP to HTTPS. Traceforge itself listens only on 127.0.0.1:8000.
+#
+# Forwarded headers: Caddy ignores X-Forwarded-* sent by clients unless `trusted_proxies` is configured (it is not,
+# here), sets X-Forwarded-For to the real client address and X-Forwarded-Proto to https, and passes Host through.
+# Checked with Caddy 2.10.2: a client-sent "X-Forwarded-Proto: http" is replaced. Traceforge believes these headers
+# only from TRACEFORGE_TRUSTED_PROXIES=127.0.0.1,::1.
+
+traceforge.example.com {
+	encode zstd gzip
+
+	# Matches TRACEFORGE_MAX_REQUEST_BYTES (5 MiB) with a little headroom; the application enforces the real limit.
+	request_body {
+		max_size 6MB
+	}
+
+	reverse_proxy 127.0.0.1:8000 {
+		# Fail fast if the application is down instead of hanging requests.
+		transport http {
+			dial_timeout 5s
+		}
+	}
+
+	# The application sets CSP, frame and content-type headers itself; HSTS belongs to the TLS endpoint.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	header -Server
+
+	# Access log: keeps method, path, status, timing, client address and user agent, and removes secrets that can
+	# appear in URLs or headers. Caddy already redacts Cookie, Set-Cookie and Authorization by default; the filter
+	# below also covers the OAuth callback (?code=...&state=...), the redirect to the provider (Location: ...state=),
+	# the CSRF header and token-like query parameters. Parameter names stay visible with the value REDACTED.
+	log {
+		output file /var/log/caddy/traceforge-access.log {
+			roll_size 50MiB
+			roll_keep 10
+		}
+		format filter {
+			request>uri query {
+				replace code REDACTED
+				replace state REDACTED
+				replace token REDACTED
+				replace access_token REDACTED
+				replace id_token REDACTED
+				replace refresh_token REDACTED
+				replace api_key REDACTED
+				replace key REDACTED
+				replace invite REDACTED
+				replace invite_code REDACTED
+				replace password REDACTED
+				replace secret REDACTED
+				replace client_secret REDACTED
+			}
+			request>headers>X-Csrf-Token replace REDACTED
+			request>headers>Referer regexp "([?&#](?:code|state|token|access_token|id_token|invite)=)[^&#]*" "${1}REDACTED"
+			resp_headers>Location regexp "([?&#](?:code|state|token|access_token|id_token|invite)=)[^&#]*" "${1}REDACTED"
+			wrap json
+		}
+	}
+}

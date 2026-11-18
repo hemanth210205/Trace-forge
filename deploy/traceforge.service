@@ -1,0 +1,49 @@
+# systemd unit for Traceforge (see DEPLOY.md). Install as /etc/systemd/system/traceforge.service.
+#
+# Runs the documented startup command on the main (production) database. `app.serve --database main` never
+# migrates: if the database is not at the code's schema revision it refuses to start (status 2), so run the
+# migration step from DEPLOY.md first. Configuration and secrets come from /opt/traceforge/.env (mode 600),
+# which the application reads itself; nothing secret appears in this file or on the command line.
+
+[Unit]
+Description=Traceforge (API and console)
+Documentation=file:///opt/traceforge/DEPLOY.md
+After=network-online.target docker.service
+# PostgreSQL runs in Docker with `restart: unless-stopped`. Start after Docker, but do not stop when Docker
+# restarts (Requires= would): the application reconnects, and /api/v1/health reports the database meanwhile.
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+User=traceforge
+Group=traceforge
+WorkingDirectory=/opt/traceforge/backend
+ExecStart=/opt/traceforge/.venv/bin/python -m app.serve --database main --host 127.0.0.1 --port 8000
+Environment=PYTHONUNBUFFERED=1
+# A schema mismatch (exit 2) is a deployment error, not something a restart can fix.
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=2
+TimeoutStopSec=30
+
+# Hardening: the service only needs to read its code, read .env, and talk to PostgreSQL over loopback.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

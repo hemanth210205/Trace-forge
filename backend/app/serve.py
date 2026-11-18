@@ -16,6 +16,10 @@ connects over loopback, so any local process could pick its own client IP, and w
 rate-limit budget on every request. The options below are passed directly to ``uvicorn.run``; no
 command-line flag or environment variable (``FORWARDED_ALLOW_IPS``, ``UVICORN_*``) can re-enable them.
 ``X-Real-IP`` is not interpreted by uvicorn or by the application.
+
+Behind a reverse proxy (see DEPLOY.md), the application itself reads ``X-Forwarded-For`` / ``X-Forwarded-Proto``,
+and only when the direct peer is listed in ``TRACEFORGE_TRUSTED_PROXIES`` (``app/core/proxy.py``). With that list
+empty, the default, the behaviour described above is unchanged.
 """
 
 import argparse
@@ -26,7 +30,10 @@ from typing import Any
 import uvicorn
 
 # Applied to every server started by this module; tests/test_server_runtime.py serves the app with them.
-SERVER_OPTIONS: dict[str, Any] = {"proxy_headers": False, "forwarded_allow_ips": []}
+# access_log=False: uvicorn's own access log prints the full URL including the query string (for example the one-time
+# OAuth ``code`` on /auth/oauth/<provider>/callback). The application's JSON access log (app/core/middleware.py)
+# already records every request with its path only, so nothing is lost.
+SERVER_OPTIONS: dict[str, Any] = {"proxy_headers": False, "forwarded_allow_ips": [], "access_log": False}
 VITE_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")  # the Vite dev server (npm run dev)
 # Traceforge is a localhost-only product (plain HTTP, in-process limiter and recovery): no other bind address.
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")

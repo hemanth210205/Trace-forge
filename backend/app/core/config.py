@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -81,12 +81,50 @@ class Settings(BaseSettings):
         default=10_000, ge=100, le=1_000_000, validation_alias="TRACEFORGE_LOGIN_LIMITER_MAX_KEYS"
     )
 
+    # Reverse proxies whose X-Forwarded-For / X-Forwarded-Proto are believed (IPs or CIDRs, comma-separated).
+    # Empty (the default): forwarded headers are ignored and the direct peer is the client. See app/core/proxy.py.
+    trusted_proxies: str = Field(default="", validation_alias="TRACEFORGE_TRUSTED_PROXIES")
+
+    # Who may create an account (by password or through Google/GitHub). Existing accounts can always sign in.
+    #   open: anyone; disabled: nobody (create accounts with `python -m app.accounts`);
+    #   domain: emails in TRACEFORGE_REGISTRATION_DOMAINS; invite: holders of an invitation (app/services/invitations.py).
+    registration: Literal["open", "disabled", "domain", "invite"] = Field(default="open", validation_alias="TRACEFORGE_REGISTRATION")
+    registration_domains: str = Field(default="", validation_alias="TRACEFORGE_REGISTRATION_DOMAINS")
+    invitation_ttl_days: int = Field(default=7, ge=1, le=90, validation_alias="TRACEFORGE_INVITATION_TTL_DAYS")
+
     @field_validator("secret_key", "api_key_pepper")
     @classmethod
     def _long_enough(cls, value: SecretStr) -> SecretStr:
         if len(value.get_secret_value()) < 32:
             raise ValueError("must be at least 32 characters; see .env.example")
         return value
+
+    @field_validator("trusted_proxies")
+    @classmethod
+    def _valid_proxies(cls, value: str) -> str:
+        from app.core.proxy import parse_networks
+
+        try:
+            parse_networks(value)
+        except ValueError as exc:
+            raise ValueError(f"must be comma-separated IP addresses or CIDR ranges ({exc})") from None
+        return value
+
+    @model_validator(mode="after")
+    def _domains_for_domain_mode(self) -> "Settings":
+        if self.registration == "domain" and not self.registration_domain_list:
+            raise ValueError("TRACEFORGE_REGISTRATION=domain needs TRACEFORGE_REGISTRATION_DOMAINS (e.g. example.com)")
+        return self
+
+    @property
+    def trusted_proxy_networks(self) -> list:
+        from app.core.proxy import parse_networks
+
+        return parse_networks(self.trusted_proxies)
+
+    @property
+    def registration_domain_list(self) -> list[str]:
+        return [d.strip().lower().lstrip("@") for d in self.registration_domains.split(",") if d.strip()]
 
     @property
     def allowed_host_list(self) -> list[str]:

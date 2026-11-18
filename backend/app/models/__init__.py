@@ -11,6 +11,7 @@ from app.models.evaluation import (
     EvaluationRun,
 )
 from app.models.experiment import Experiment, ExperimentDecision
+from app.models.invitation import Invitation
 from app.models.project import Project, ProjectApiKey
 from app.models.trace import Span, Trace
 from app.models.user import OAuthIdentity, User, UserSession
@@ -28,6 +29,7 @@ __all__ = [
     "EvaluationRun",
     "Experiment",
     "ExperimentDecision",
+    "Invitation",
     "OAuthIdentity",
     "Project",
     "ProjectApiKey",
