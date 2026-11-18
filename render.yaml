@@ -42,9 +42,10 @@ services:
       # it when the Blueprint is created) and a Blueprint sync never overwrites it. See DEPLOY.md, R1.
       - key: TRACEFORGE_MIGRATE_MAIN_ON_START
         sync: false
-      # Who may create accounts: create the first one from your computer (DEPLOY.md, "Render").
+      # Who may create accounts. oauth: anyone, through Google or GitHub (provider-verified email); a password sign-up
+      # needs an invitation, so nobody can claim someone else's address. See DEPLOY.md, "Registration modes".
       - key: TRACEFORGE_REGISTRATION
-        value: invite
+        value: oauth
       - key: TRACEFORGE_DIAGNOSIS_PROVIDER
         value: mock
       # Sign in with Google / GitHub is added later in the dashboard (Environment), once the live address exists and

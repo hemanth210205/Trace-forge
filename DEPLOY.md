@@ -59,7 +59,7 @@ What `render.yaml` sets, and why:
 | `TRACEFORGE_COOKIE_SECURE` | `true` | Sessions only over HTTPS |
 | `TRACEFORGE_TRUSTED_PROXIES` | private address ranges | Render's internal hop reaches the service from a private address. Forwarded headers are believed only from those ranges, so a client cannot spoof its address. Which address the rate limiter then sees on Render must be checked live: see [Client addresses on Render](#client-addresses-on-render-check-after-deploying) |
 | `TRACEFORGE_MIGRATE_MAIN_ON_START` | entered by you: the database's exact name | Upgrades the database at start. Must equal the database name (which may have a suffix, see step 4); anything else stops the server. Kept in the dashboard (`sync: false`), so a Blueprint sync never resets it |
-| `TRACEFORGE_REGISTRATION` | `invite` | Nobody can sign up without an invitation |
+| `TRACEFORGE_REGISTRATION` | `oauth` | Anyone can create an account with Google or GitHub; a password sign-up needs an invitation. Set `invite` or `disabled` to close sign-up (see [Registration modes](#4-configure)) |
 | Public URL, allowed host, trusted origin | your `onrender.com` address | Taken from `RENDER_EXTERNAL_URL` / `RENDER_EXTERNAL_HOSTNAME` by `deploy/render-start.sh` |
 
 ### R2. Create your account (from your computer)
@@ -95,7 +95,7 @@ There is no shell on the free plan, so run the account tool locally against the 
 ```powershell
 $u = "https://<your-address>"
 curl.exe -s "$u/api/v1/health"                      # {"status":"ok","database":"ok",...}
-curl.exe -s "$u/api/v1/auth/registration"          # {"mode":"invite"}
+curl.exe -s "$u/api/v1/auth/registration"          # {"mode":"oauth"}
 ```
 
 Then run the two client-address checks below. They decide whether the login rate limit works per visitor on Render.
@@ -398,6 +398,7 @@ infrastructure.
 | `disabled` | None | Create accounts with `python -m app.accounts user create` (section 7) |
 | `domain` | Emails in `TRACEFORGE_REGISTRATION_DOMAINS` | Password sign-up does not verify the address (Traceforge sends no email), so anyone may *claim* such an address with a password. Google/GitHub sign-in requires a provider-verified email. Prefer `invite` if that matters |
 | `invite` | Holders of an invitation | An invitation is tied to one email, used once, expires (default 7 days) and can be revoked. Password sign-up needs its code; Google/GitHub sign-in needs a pending invitation for the verified email |
+| `oauth` | Anyone with Google or GitHub; passwords by invitation | The provider has verified the email, so nobody can claim someone else's address in advance (with `open`, a password sign-up could, and that person's later Google/GitHub sign-in would link to it). Password sign-up needs an invitation code, as in `invite`. The Render default |
 
 Leave `TEST_DATABASE_URL` and `DEV_DATABASE_URL` unset on the server: the production server runs only against the
 main database, and the test suite (which truncates its database) must never run here.

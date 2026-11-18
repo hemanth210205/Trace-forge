@@ -3,7 +3,12 @@
 Registration modes apply to every way an account is created: the password form *and* Google/GitHub sign-in.
 Signing in to an existing account is never affected.
 
-Invitations (mode ``invite``):
+Mode ``oauth``: anyone may create an account through Google/GitHub, because the provider has verified the email;
+password registration needs an invitation code, as in ``invite``. Unverified password sign-ups are what would let
+someone claim another person's address before they arrive (a later Google/GitHub sign-in links to the existing
+account by email), so this mode opens sign-up without allowing that.
+
+Invitations (modes ``invite`` and ``oauth``):
 - Tied to one email address; created only for an email that has no account yet.
 - The code (``secrets.token_urlsafe``) is shown once by ``python -m app.accounts invite create``; only its SHA-256
   is stored, and no code is ever logged.
@@ -67,13 +72,23 @@ def check_before_create(settings: Settings, email: str, *, has_code: bool, verif
             raise RegistrationRefused("domain_not_allowed", "Accounts with this email domain cannot be created here.")
     if mode == "invite" and not has_code and not verified_email:
         raise RegistrationRefused("invitation_required", "An invitation is required to create an account.")
+    if mode == "oauth" and not has_code and not verified_email:
+        raise RegistrationRefused(
+            "invitation_required", "Create your account with Google or GitHub, or use an invitation code to sign up with a password."
+        )
 
 
 def consume_for_new_account(
     db: Session, settings: Settings, user: User, *, code: str | None, verified_email: bool, now: datetime | None = None
 ) -> uuid.UUID | None:
-    """In ``invite`` mode, uses one invitation for ``user`` (flushed, not committed) or raises. Other modes: no-op."""
-    if settings.registration != "invite":
+    """Uses one invitation for ``user`` (flushed, not committed) or raises, where the mode requires one.
+
+    ``invite``: every new account. ``oauth``: only password sign-ups (a Google/GitHub sign-up needs none, and does
+    not use up a pending invitation for its address). Other modes: no-op.
+    """
+    if settings.registration not in ("invite", "oauth"):
+        return None
+    if settings.registration == "oauth" and code is None and verified_email:
         return None
     now = now or utcnow()
     if code:

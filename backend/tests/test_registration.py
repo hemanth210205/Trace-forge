@@ -243,6 +243,89 @@ def test_oauth_cannot_use_an_invitation_for_a_different_email(
     assert users(db) == []
 
 
+# --- oauth: open through Google/GitHub, invitation for passwords --------------------------------------------------
+
+
+def test_oauth_mode_is_published_and_valid(client: ApiClient, policy: Any) -> None:
+    policy("oauth")
+    assert client.get("/api/v1/auth/registration").json() == {"mode": "oauth"}
+    Settings(TRACEFORGE_SECRET_KEY=TEST_SECRET_KEY, TRACEFORGE_API_KEY_PEPPER=TEST_API_KEY_PEPPER,  # type: ignore[call-arg]
+             TRACEFORGE_REGISTRATION="oauth")
+
+
+def test_oauth_mode_lets_anyone_sign_up_with_a_provider_without_an_invitation(
+    make_client: Any, providers: FakeProviders, policy: Any, db: Session  # noqa: F811
+) -> None:
+    policy("oauth")
+    client = make_client()
+    assert sign_in(client, "github") == f"{PUBLIC}/"
+    assert client.get(ME).json()["user"]["email"] == "ada@example.com"
+    user = db.scalar(select(User))
+    assert user is not None and user.password_hash is None  # a provider account, no password anyone could know
+    assert len(db.scalars(select(Invitation)).all()) == 0
+
+
+def test_oauth_mode_refuses_password_sign_up_without_an_invitation(
+    make_client: Any, policy: Any, db: Session
+) -> None:
+    make_client().register("taken@example.com")
+    policy("oauth")
+    for email in ("new@example.com", "taken@example.com"):  # same answer whether or not the email exists
+        response = register(make_client(), email)
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "invitation_required"
+        assert "Google or GitHub" in response.json()["error"]["message"]
+    assert users(db) == ["taken@example.com"]
+
+
+def test_oauth_mode_accepts_a_password_sign_up_with_a_valid_invitation(
+    make_client: Any, policy: Any, engine: Engine, db: Session
+) -> None:
+    policy("oauth")
+    created = invite(engine, "ada@example.com")
+    assert register(make_client(), "mallory@example.com", created.code).json()["error"]["code"] == "invitation_invalid"
+    assert register(make_client(), "ada@example.com", created.code).status_code == 201
+    db.expire_all()
+    assert invitations.status(db.get(Invitation, created.invitation.id)) == "used"  # type: ignore[arg-type]
+
+
+def test_oauth_mode_prevents_claiming_someone_elses_email_before_they_sign_in(
+    make_client: Any, providers: FakeProviders, policy: Any, db: Session  # noqa: F811
+) -> None:
+    """The reason for the mode: nobody can pre-register the address a provider will later vouch for."""
+    policy("oauth")
+    squatter = register(make_client(), "ada@example.com")  # the address the fake provider verifies
+    assert squatter.status_code == 403
+    assert users(db) == []
+    owner = make_client()
+    assert sign_in(owner, "google") == f"{PUBLIC}/"
+    user = db.scalar(select(User))
+    assert user is not None and user.email == "ada@example.com" and user.password_hash is None
+    # No password was ever set, so password sign-in to that account fails for everyone.
+    assert make_client().post(LOGIN, json={"email": "ada@example.com", "password": PASSWORD}).status_code == 401
+
+
+def test_oauth_mode_sign_up_leaves_a_pending_invitation_for_that_email_unused(
+    make_client: Any, providers: FakeProviders, policy: Any, engine: Engine, db: Session  # noqa: F811
+) -> None:
+    policy("oauth")
+    created = invite(engine, "ada@example.com")
+    assert sign_in(make_client(), "google") == f"{PUBLIC}/"
+    db.expire_all()
+    assert invitations.status(db.get(Invitation, created.invitation.id)) == "pending"  # type: ignore[arg-type]
+
+
+def test_oauth_mode_keeps_existing_password_accounts_working(make_client: Any, policy: Any) -> None:
+    make_client().register("ada@example.com")
+    policy("oauth")
+    assert make_client().post(LOGIN, json={"email": "ada@example.com", "password": PASSWORD}).status_code == 200
+
+
+def test_cli_invite_note_in_oauth_mode(policy: Any, engine: Engine) -> None:
+    code, out = run_cli(engine, policy("oauth"), "invite", "create", "ada@example.com")
+    assert code == 0 and "not required yet" not in out
+
+
 # --- concurrency ------------------------------------------------------------------------------------------------
 
 

@@ -34,7 +34,8 @@ import { OAuthButtons, oauthErrorMessage } from "../components/OAuthButtons";
 import { Button, CopyButton, Field, PasswordInput, TextInput } from "../components/ui";
 
 type Mode = "login" | "register";
-type RegistrationMode = "open" | "disabled" | "domain" | "invite";
+// oauth: anyone may sign up with Google/GitHub; a password sign-up needs an invitation code.
+type RegistrationMode = "open" | "disabled" | "domain" | "invite" | "oauth";
 
 /** The front page: what Traceforge is, how to use it, and the sign-in / create-account form. */
 export function AuthPage({ mode }: { mode: Mode }) {
@@ -118,6 +119,7 @@ function AuthCard({ mode }: { mode: Mode }) {
   const [inviteCode, setInviteCode] = useState(() => new URLSearchParams(location.hash.slice(1)).get("invite") ?? "");
   const registration = useApi((signal) => api<{ mode: RegistrationMode }>("/auth/registration", { signal }), []);
   const registrationMode = registration.data?.mode ?? "open";
+  const needsCode = registrationMode === "invite" || registrationMode === "oauth";
   const [searchParams] = useSearchParams();
   // Set by the backend when a Google/GitHub sign-in fails: /login?oauth_error=<code>.
   const [error, setError] = useState<string | null>(() => oauthErrorMessage(searchParams.get("oauth_error")));
@@ -135,7 +137,7 @@ function AuthCard({ mode }: { mode: Mode }) {
     setError(null);
     try {
       if (mode === "login") await login(email, password);
-      else await register(email, password, displayName, registrationMode === "invite" ? inviteCode.trim() : undefined);
+      else await register(email, password, displayName, needsCode ? inviteCode.trim() : undefined);
       navigate(next, { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.code === "too_many_attempts") {
@@ -179,13 +181,21 @@ function AuthCard({ mode }: { mode: Mode }) {
         </div>
       ) : (
       <>
+      {mode === "register" && registrationMode === "oauth" && (
+        <div role="status" className="relative mt-6 rounded-2xl border border-accent-400/25 bg-accent-400/[0.06] p-4 text-sm text-slate-300">
+          <p className="font-medium text-slate-100">Sign up with Google or GitHub</p>
+          <p className="mt-1">
+            Anyone can create an account with the buttons below. A password account needs an invitation code.
+          </p>
+        </div>
+      )}
       <form onSubmit={submit} className="relative mt-6 space-y-4">
         {mode === "register" && (
           <Field label="Name">
             <TextInput large value={displayName} onChange={(e) => setDisplayName(e.target.value)} required maxLength={100} autoComplete="name" placeholder="Your name" />
           </Field>
         )}
-        {mode === "register" && registrationMode === "invite" && (
+        {mode === "register" && needsCode && (
           <Field label="Invitation code" hint="From your invitation link. It works only for the address it was sent to.">
             <TextInput large value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} required maxLength={200} autoComplete="off" spellCheck={false} />
           </Field>

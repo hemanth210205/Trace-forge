@@ -88,7 +88,8 @@ class Settings(BaseSettings):
     # Who may create an account (by password or through Google/GitHub). Existing accounts can always sign in.
     #   open: anyone; disabled: nobody (create accounts with `python -m app.accounts`);
     #   domain: emails in TRACEFORGE_REGISTRATION_DOMAINS; invite: holders of an invitation (app/services/invitations.py).
-    registration: Literal["open", "disabled", "domain", "invite"] = Field(default="open", validation_alias="TRACEFORGE_REGISTRATION")
+    # oauth: anyone may sign up with Google/GitHub (provider-verified email); password sign-up needs an invitation.
+    registration: Literal["open", "disabled", "domain", "invite", "oauth"] = Field(default="open", validation_alias="TRACEFORGE_REGISTRATION")
     registration_domains: str = Field(default="", validation_alias="TRACEFORGE_REGISTRATION_DOMAINS")
     invitation_ttl_days: int = Field(default=7, ge=1, le=90, validation_alias="TRACEFORGE_INVITATION_TTL_DAYS")
 

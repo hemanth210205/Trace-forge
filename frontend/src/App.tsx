@@ -8,6 +8,7 @@ import { ApiKeysPage } from "./pages/ApiKeysPage";
 import { AuthPage } from "./pages/AuthPage";
 import { AuthorPage } from "./pages/AuthorPage";
 import { DocsPage } from "./pages/DocsPage";
+import { PrivacyPage } from "./pages/PrivacyPage";
 import { DatasetPage } from "./pages/DatasetPage";
 import { DatasetsPage } from "./pages/DatasetsPage";
 import { DiagnosesPage, DiagnosisPage } from "./pages/DiagnosisPages";
@@ -40,6 +41,7 @@ export function App() {
       {/* Public: shareable without an account. */}
       <Route path="/author" element={<AuthorPage />} />
       <Route path="/docs" element={<DocsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route
         element={
           <RequireAuth>

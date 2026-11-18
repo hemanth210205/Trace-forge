@@ -62,6 +62,9 @@ export function AuthorCredit({ className }: { className?: string }) {
           <GitHubMark className="h-3.5 w-3.5" />
           <span>GitHub</span>
         </a>
+        <Link className={linkClass} to="/privacy">
+          Privacy
+        </Link>
       </nav>
     </div>
   );

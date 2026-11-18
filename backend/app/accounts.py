@@ -108,7 +108,7 @@ def _run(args: argparse.Namespace, settings: Settings, db: Session, out: TextIO,
         print(f"Code (shown once): {created.code}", file=out)
         # The code is in the fragment (#...): browsers never send it to the server, so it stays out of access logs.
         print(f"Link: {settings.public_origin}/register#invite={created.code}", file=out)
-        if settings.registration != "invite":
+        if settings.registration not in ("invite", "oauth"):
             print(f"Note: TRACEFORGE_REGISTRATION is '{settings.registration}', so invitations are not required yet.", file=out)
         return 0
     if args.group == "invite" and args.action == "list":
